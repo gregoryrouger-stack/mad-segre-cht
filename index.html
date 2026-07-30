@@ -171,6 +171,12 @@
   .card .icon-wrap{
     width:100%; aspect-ratio:1; border-radius:12px; overflow:hidden; margin-bottom:10px;
     background:#111; display:flex; align-items:center; justify-content:center;
+    position:relative;
+  }
+  .count-badge{
+    position:absolute; top:6px; right:6px;
+    background:rgba(0,0,0,.65); color:white; font-size:10.5px; font-weight:800;
+    padding:2px 6.5px; border-radius:999px; line-height:1.3;
   }
   .card .icon-wrap img{ width:100%; height:100%; object-fit:cover; display:block; }
   .card .code{ font-size:11px; font-weight:800; color:var(--bordeaux); text-transform:uppercase; letter-spacing:.3px;}
@@ -368,21 +374,16 @@ MATERIELS_JSON = [{"id": "0f3MGHVYQTSHn4FwKReDZw", "nom": "VW frigo", "categorie
   function freshBaseData(){
     const res = RESERVATIONS_JSON.map(r => ({
       ...r,
-      // les réservations déjà marquées "Retour" dans les données d'origine
-      // sont considérées comme déjà rendues, pas comme "à retourner"
       rendu: !!r.retour,
     }));
     const mat = MATERIELS_JSON.map(m => ({...m}));
     return {res, mat};
   }
 
-  // sauvegarde via les fonctions Cloudflare (functions/api/reservations.js, functions/api/materiels.js)
-  // qui lisent/écrivent dans une base D1 — partagée entre tous les appareils
   async function persistReservations(){
     try{
       const r = await fetch('/api/reservations', {
-        method: 'POST',
-        headers: {'Content-Type':'application/json'},
+        method: 'POST', headers: {'Content-Type':'application/json'},
         body: JSON.stringify(reservations)
       });
       if(!r.ok) throw new Error('HTTP '+r.status);
@@ -394,8 +395,7 @@ MATERIELS_JSON = [{"id": "0f3MGHVYQTSHn4FwKReDZw", "nom": "VW frigo", "categorie
   async function persistMateriels(){
     try{
       const r = await fetch('/api/materiels', {
-        method: 'POST',
-        headers: {'Content-Type':'application/json'},
+        method: 'POST', headers: {'Content-Type':'application/json'},
         body: JSON.stringify(materiels)
       });
       if(!r.ok) throw new Error('HTTP '+r.status);
@@ -411,16 +411,15 @@ MATERIELS_JSON = [{"id": "0f3MGHVYQTSHn4FwKReDZw", "nom": "VW frigo", "categorie
     try{
       const r = await fetch('/api/reservations', {cache:'no-store'});
       if(r.ok){ const data = await r.json(); if(data) storedRes = data; }
-    }catch(e){ /* API indisponible -> on repart de la base */ }
+    }catch(e){}
     try{
       const m = await fetch('/api/materiels', {cache:'no-store'});
       if(m.ok){ const data = await m.json(); if(data) storedMat = data; }
-    }catch(e){ /* idem */ }
+    }catch(e){}
 
     reservations = storedRes || baseRes;
     materiels = storedMat || baseMat;
 
-    // première utilisation : on enregistre la base pour la suite
     if(!storedRes) persistReservations();
     if(!storedMat) persistMateriels();
   }
@@ -488,6 +487,15 @@ MATERIELS_JSON = [{"id": "0f3MGHVYQTSHn4FwKReDZw", "nom": "VW frigo", "categorie
   const CATEGORIES_NON_RESERVABLES = new Set(["Chez le client - Tirage fixe"]);
 
   // liste des matériels sans conflit sur la période donnée (hors catégories non réservables et matériel en panne)
+  // nombre de réservations de ce matériel dont le début est dans l'année en cours
+  function countReservationsThisYear(materielNom){
+    const yearStart = TODAY.slice(0,4) + "-01-01";
+    return reservations.filter(r =>
+      r.materiel.trim().toLowerCase() === (materielNom||'').trim().toLowerCase() &&
+      r.debut && r.debut >= yearStart
+    ).length;
+  }
+
   // vrai si ce matériel a une réservation passée pas encore cochée "rendu"
   // (excludeReservationId permet d'ignorer la réservation elle-même, ex: sur sa propre carte)
   function hasPendingReturn(materielNom, excludeReservationId){
@@ -845,9 +853,10 @@ MATERIELS_JSON = [{"id": "0f3MGHVYQTSHn4FwKReDZw", "nom": "VW frigo", "categorie
         <div class="grid">${items.map(m=>{
           const panne = m.lieu === "En panne";
           const nonRevenu = !panne && hasPendingReturn(m.nom);
+          const countYear = countReservationsThisYear(m.nom);
           return `
           <div class="card ${panne?'overdue':''} ${nonRevenu?'non-revenu':''}" data-id="${m.id}" data-kind="mat">
-            <div class="icon-wrap">${m.icone?`<img src="${m.icone}" loading="lazy"/>`:''}</div>
+            <div class="icon-wrap">${m.icone?`<img src="${m.icone}" loading="lazy"/>`:''}${countYear>0?`<span class="count-badge">${countYear}×</span>`:''}</div>
             <div class="name">${m.nom}</div>
             <div class="place">${panne ? m.lieu+' ⚠' : (nonRevenu ? 'Non revenu ⏳' : m.lieu)}</div>
           </div>`;
@@ -929,6 +938,8 @@ MATERIELS_JSON = [{"id": "0f3MGHVYQTSHn4FwKReDZw", "nom": "VW frigo", "categorie
     const enPanne = m.lieu === "En panne";
     const pendingReturns = reservations.filter(r=> r.materiel.trim().toLowerCase()===m.nom.trim().toLowerCase() && isPending(r));
     const nonRevenu = !enPanne && pendingReturns.length>0;
+    const countYear = countReservationsThisYear(m.nom);
+    const anneeEnCours = TODAY.slice(0,4);
     mainEl.innerHTML = `
       <button class="btn btn-ghost" id="backToMat" style="margin-bottom:18px;">← Retour aux matériels</button>
       <div style="display:flex; gap:20px; align-items:center; flex-wrap:wrap; margin-bottom:22px;">
@@ -939,6 +950,7 @@ MATERIELS_JSON = [{"id": "0f3MGHVYQTSHn4FwKReDZw", "nom": "VW frigo", "categorie
           <div style="font-size:24px;font-weight:800;">${m.nom}</div>
           <div style="color:#8a8189;font-size:13px; margin-top:2px;">CATÉGORIE</div>
           <div style="font-weight:700;">${m.categorie}</div>
+          <div style="color:#8a8189;font-size:12.5px; margin-top:6px;">📊 Réservé <strong style="color:var(--ink);">${countYear} fois</strong> depuis le 1er janvier ${anneeEnCours}</div>
         </div>
         <button class="btn btn-solid" style="margin-left:auto;" id="editMatBtn">✎ Modifier</button>
       </div>
