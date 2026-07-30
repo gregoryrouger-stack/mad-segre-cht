@@ -103,6 +103,15 @@
   .btn-primary{ background:white; color:var(--bordeaux); display:flex; align-items:center; gap:6px;}
   .btn-primary:hover{ background:#f2eaf0; }
 
+  /* le bouton Réserver / Ajouter reste toujours visible en haut à droite, même en défilant */
+  #btnReserver, #btnAjouterMat{
+    position:fixed;
+    top:100px;
+    right:20px;
+    z-index:45;
+    box-shadow:0 6px 18px rgba(0,0,0,.28);
+  }
+
   .btn-filter{
     display:flex; align-items:center; gap:7px;
     padding:10px 16px; border-radius:10px; border:none;
@@ -273,8 +282,8 @@
     .btn-filter{ flex-shrink:0; padding:10px 12px; }
     .btn-filter span{ display:none; }
     #btnReserver, #btnAjouterMat{
-      position:fixed; right:16px; bottom:calc(78px + env(safe-area-inset-bottom));
-      width:auto; z-index:35; box-shadow:0 6px 18px rgba(0,0,0,.28);
+      top:calc(58px + env(safe-area-inset-top));
+      right:14px;
     }
 
     main{ padding:14px 14px calc(84px + env(safe-area-inset-bottom)) 14px; }
