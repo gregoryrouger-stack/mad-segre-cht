@@ -146,16 +146,19 @@
 
   .ongoing-block{
     margin-bottom:22px; border-radius:16px;
-    border:1.5px solid var(--bordeaux-light); background:#ecd9e5;
+    border:1.5px solid #2b6cb0; background:#e3eefb;
   }
   .ongoing-toggle{
     width:100%; display:flex; align-items:center; justify-content:space-between;
-    gap:10px; padding:14px 18px; background:var(--bordeaux-light); color:white;
+    gap:10px; padding:14px 18px; background:#2b6cb0; color:white;
     border:none; cursor:pointer; font-size:14px; font-weight:800; text-align:left;
     position:sticky; top:0; z-index:25; border-radius:14px 14px 0 0;
   }
-  .ongoing-toggle:hover{ background:var(--bordeaux); }
+  .ongoing-toggle:hover{ background:#1e4e82; }
   .ongoing-toggle-action{ font-size:14px; font-weight:800; opacity:.9; white-space:nowrap; }
+  .ongoing-block .week-group{ background:white; border-color:#93c5fd; }
+  .ongoing-block .week-group:nth-child(odd){ background:#cfe3f7; border-color:transparent; }
+  .ongoing-block .week-title{ border-color:#93c5fd; color:#1e4e82; }
 
   .week-group{
     margin-bottom:18px; padding:18px; border-radius:16px;
@@ -280,20 +283,20 @@
       position:fixed; left:0; right:0; bottom:0; z-index:40;
       display:flex; flex-wrap:nowrap; gap:0; justify-content:space-around;
       background:var(--bordeaux-dark);
-      padding:6px 4px calc(6px + env(safe-area-inset-bottom)) 4px;
+      padding:10px 4px calc(10px + env(safe-area-inset-bottom)) 4px;
       box-shadow:0 -4px 14px rgba(0,0,0,.2);
       overflow-x:visible;
     }
     nav.tabs button{
-      flex:1; flex-shrink:1; flex-direction:column; gap:3px;
-      padding:7px 2px; font-size:10.5px; white-space:nowrap;
+      flex:1; flex-shrink:1; flex-direction:column; gap:4px;
+      padding:9px 2px; font-size:10.5px; white-space:nowrap;
       border-radius:10px; color:rgba(255,255,255,.7);
     }
     nav.tabs button.active{
       background:rgba(255,255,255,.14); color:white;
     }
-    nav.tabs .tab-icon{ display:block; font-size:16px; line-height:1; }
-    nav.tabs .badge{ position:absolute; margin-left:16px; margin-top:-16px; font-size:11px; min-width:16px; padding:1.5px 6px; }
+    nav.tabs .tab-icon{ display:block; font-size:21px; line-height:1; }
+    nav.tabs .badge{ position:absolute; margin-left:18px; margin-top:-19px; font-size:11px; min-width:16px; padding:1.5px 6px; }
 
     footer.statusbar{ display:none; }
 
@@ -311,7 +314,7 @@
       right:14px;
     }
 
-    main{ padding:14px 14px calc(84px + env(safe-area-inset-bottom)) 14px; }
+    main{ padding:14px 14px calc(100px + env(safe-area-inset-bottom)) 14px; }
     .grid{ grid-template-columns:repeat(3, 1fr); gap:8px; }
     .card{ padding:9px; border-radius:12px; }
     .card .icon-wrap{ margin-bottom:7px; border-radius:9px; }
@@ -331,8 +334,8 @@
     .res-mini{ padding:9px 10px; }
     .retour-row{ padding:11px 2px; gap:11px; }
 
-    .toast{ left:14px; right:14px; transform:none; bottom:calc(78px + env(safe-area-inset-bottom)); text-align:center; }
-    .toast.show{ bottom:calc(88px + env(safe-area-inset-bottom)); }
+    .toast{ left:14px; right:14px; transform:none; bottom:calc(94px + env(safe-area-inset-bottom)); text-align:center; }
+    .toast.show{ bottom:calc(104px + env(safe-area-inset-bottom)); }
   }
 </style>
 </head>
@@ -379,9 +382,6 @@ MATERIELS_JSON = [{"id": "0f3MGHVYQTSHn4FwKReDZw", "nom": "VW frigo", "categorie
   }
 
   // ---- state ----
-  const STORAGE_KEY_RES = "mad_reservations_v1";
-  const STORAGE_KEY_MAT = "mad_materiels_v1";
-
   let reservations = [];
   let materiels = [];
   let nextId = 100000;
@@ -390,8 +390,6 @@ MATERIELS_JSON = [{"id": "0f3MGHVYQTSHn4FwKReDZw", "nom": "VW frigo", "categorie
   function freshBaseData(){
     const res = RESERVATIONS_JSON.map(r => ({
       ...r,
-      // les réservations déjà marquées "Retour" dans les données d'origine
-      // sont considérées comme déjà rendues, pas comme "à retourner"
       rendu: !!r.retour,
     }));
     const mat = MATERIELS_JSON.map(m => ({...m}));
@@ -400,36 +398,44 @@ MATERIELS_JSON = [{"id": "0f3MGHVYQTSHn4FwKReDZw", "nom": "VW frigo", "categorie
 
   async function persistReservations(){
     try{
-      if(window.storage) await window.storage.set(STORAGE_KEY_RES, JSON.stringify(reservations), false);
-    }catch(e){ console.error("Erreur de sauvegarde (réservations):", e); }
+      const r = await fetch('/api/reservations', {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify(reservations)
+      });
+      if(!r.ok) throw new Error('HTTP '+r.status);
+    }catch(e){
+      console.error("Erreur de sauvegarde (réservations):", e);
+      toast("⚠ Échec de la sauvegarde — vérifie le lien D1 dans les réglages Cloudflare.");
+    }
   }
   async function persistMateriels(){
     try{
-      if(window.storage) await window.storage.set(STORAGE_KEY_MAT, JSON.stringify(materiels), false);
-    }catch(e){ console.error("Erreur de sauvegarde (matériels):", e); }
+      const r = await fetch('/api/materiels', {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify(materiels)
+      });
+      if(!r.ok) throw new Error('HTTP '+r.status);
+    }catch(e){
+      console.error("Erreur de sauvegarde (matériels):", e);
+      toast("⚠ Échec de la sauvegarde — vérifie le lien D1 dans les réglages Cloudflare.");
+    }
   }
 
   async function loadData(){
     const {res: baseRes, mat: baseMat} = freshBaseData();
     let storedRes = null, storedMat = null;
     try{
-      if(window.storage){
-        const r = await window.storage.get(STORAGE_KEY_RES, false);
-        if(r && r.value) storedRes = JSON.parse(r.value);
-      }
-    }catch(e){ /* rien de sauvegardé encore, ou erreur lecture -> on repart de la base */ }
+      const r = await fetch('/api/reservations', {cache:'no-store'});
+      if(r.ok){ const data = await r.json(); if(data) storedRes = data; }
+    }catch(e){}
     try{
-      if(window.storage){
-        const m = await window.storage.get(STORAGE_KEY_MAT, false);
-        if(m && m.value) storedMat = JSON.parse(m.value);
-      }
-    }catch(e){ /* idem */ }
+      const m = await fetch('/api/materiels', {cache:'no-store'});
+      if(m.ok){ const data = await m.json(); if(data) storedMat = data; }
+    }catch(e){}
 
     reservations = storedRes || baseRes;
     materiels = storedMat || baseMat;
 
-    // corrige les réservations dont la catégorie enregistrée ne correspond plus
-    // à la catégorie actuelle de leur matériel (ex: matériel changé sans mise à jour)
     let categorieCorrigee = false;
     reservations.forEach(r=>{
       const mat = materiels.find(m => m.nom.trim().toLowerCase() === (r.materiel||'').trim().toLowerCase());
@@ -439,12 +445,10 @@ MATERIELS_JSON = [{"id": "0f3MGHVYQTSHn4FwKReDZw", "nom": "VW frigo", "categorie
       }
     });
 
-    // première utilisation : on enregistre la base pour la suite
     if(!storedRes) persistReservations();
     if(!storedMat) persistMateriels();
     if(storedRes && categorieCorrigee) persistReservations();
   }
-
   let state = {
     tab: 'reservations',
     search: '',
@@ -1147,9 +1151,19 @@ MATERIELS_JSON = [{"id": "0f3MGHVYQTSHn4FwKReDZw", "nom": "VW frigo", "categorie
   }
 
   // ---- detail / edit modal ----
+  // réservations passées du même matériel, pas encore cochées "rendu" (hors celle-ci)
+  function pendingReturnsFor(materielNom, excludeId){
+    return reservations.filter(r =>
+      r.id !== excludeId &&
+      r.materiel.trim().toLowerCase() === (materielNom||'').trim().toLowerCase() &&
+      isPending(r)
+    );
+  }
+
   function openReservationDetail(id){
     const r = reservations.find(x=>x.id===id);
     if(!r) return;
+    const blocking = pendingReturnsFor(r.materiel, r.id);
     modal.innerHTML = `
       <div class="modal-head">
         <div class="icon-wrap">${r.icone?`<img src="${r.icone}"/>`:''}</div>
@@ -1157,6 +1171,16 @@ MATERIELS_JSON = [{"id": "0f3MGHVYQTSHn4FwKReDZw", "nom": "VW frigo", "categorie
         <button class="close-x" id="closeX">✕</button>
       </div>
       <div class="modal-body">
+        ${blocking.length>0 ? `
+          <div style="background:#fbe4e1;border:1.5px solid var(--warn);border-radius:12px;padding:14px 16px;margin-bottom:16px;">
+            <div style="color:var(--warn);font-weight:800;font-size:13.5px;margin-bottom:8px;">⚠ Matériel non revenu — réservation précédente non cochée :</div>
+            ${blocking.map(b=> `
+              <div style="display:flex;justify-content:space-between;gap:10px;font-size:13px;padding:4px 0;border-top:1px solid rgba(192,57,43,.2);">
+                <strong>${b.client}</strong>
+                <span>${fmtDate(b.debut)} → ${fmtDate(b.fin)}</span>
+              </div>`).join('')}
+          </div>
+        ` : ''}
         <div id="conflictBox"></div>
         <div class="field"><label>Nom client</label><input id="f_client" value="${r.client.replace(/"/g,'&quot;')}"/></div>
         <div class="two-col">
