@@ -176,10 +176,7 @@
   .card .code{ font-size:11px; font-weight:800; color:var(--bordeaux); text-transform:uppercase; letter-spacing:.3px;}
   .card .name{ font-size:13.5px; font-weight:700; line-height:1.25; margin:2px 0; }
   .card .place{ font-size:12px; color:#8a8189; }
-  .card.overdue{ border-color:var(--warn); background:#fbe4e1; }
-  .card.panne{ border-color:#c77a08; background:#fdf1de; }
-  .card.non-revenu{ border-color:#c77a08; background:#fdf1de; }
-  .panne-flag{ margin-top:6px; font-size:10.5px; font-weight:800; color:#a5690f; line-height:1.2; }
+  .card.overdue{ border-color:var(--warn); }
 
   .cat-block{ margin-bottom:32px; }
   .cat-title{ font-weight:800; font-size:15px; margin-bottom:14px; color:var(--ink); }
@@ -360,9 +357,6 @@ MATERIELS_JSON = [{"id": "0f3MGHVYQTSHn4FwKReDZw", "nom": "VW frigo", "categorie
   }
 
   // ---- state ----
-  const STORAGE_KEY_RES = "mad_reservations_v1";
-  const STORAGE_KEY_MAT = "mad_materiels_v1";
-
   let reservations = [];
   let materiels = [];
   let nextId = 100000;
@@ -379,31 +373,45 @@ MATERIELS_JSON = [{"id": "0f3MGHVYQTSHn4FwKReDZw", "nom": "VW frigo", "categorie
     return {res, mat};
   }
 
+  // sauvegarde via les fonctions Cloudflare (functions/api/reservations.js, functions/api/materiels.js)
+  // qui lisent/écrivent dans une base D1 — partagée entre tous les appareils
   async function persistReservations(){
     try{
-      if(window.storage) await window.storage.set(STORAGE_KEY_RES, JSON.stringify(reservations), false);
-    }catch(e){ console.error("Erreur de sauvegarde (réservations):", e); }
+      const r = await fetch('/api/reservations', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify(reservations)
+      });
+      if(!r.ok) throw new Error('HTTP '+r.status);
+    }catch(e){
+      console.error("Erreur de sauvegarde (réservations):", e);
+      toast("⚠ Échec de la sauvegarde — vérifie le lien D1 dans les réglages Cloudflare.");
+    }
   }
   async function persistMateriels(){
     try{
-      if(window.storage) await window.storage.set(STORAGE_KEY_MAT, JSON.stringify(materiels), false);
-    }catch(e){ console.error("Erreur de sauvegarde (matériels):", e); }
+      const r = await fetch('/api/materiels', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify(materiels)
+      });
+      if(!r.ok) throw new Error('HTTP '+r.status);
+    }catch(e){
+      console.error("Erreur de sauvegarde (matériels):", e);
+      toast("⚠ Échec de la sauvegarde — vérifie le lien D1 dans les réglages Cloudflare.");
+    }
   }
 
   async function loadData(){
     const {res: baseRes, mat: baseMat} = freshBaseData();
     let storedRes = null, storedMat = null;
     try{
-      if(window.storage){
-        const r = await window.storage.get(STORAGE_KEY_RES, false);
-        if(r && r.value) storedRes = JSON.parse(r.value);
-      }
-    }catch(e){ /* rien de sauvegardé encore, ou erreur lecture -> on repart de la base */ }
+      const r = await fetch('/api/reservations', {cache:'no-store'});
+      if(r.ok){ const data = await r.json(); if(data) storedRes = data; }
+    }catch(e){ /* API indisponible -> on repart de la base */ }
     try{
-      if(window.storage){
-        const m = await window.storage.get(STORAGE_KEY_MAT, false);
-        if(m && m.value) storedMat = JSON.parse(m.value);
-      }
+      const m = await fetch('/api/materiels', {cache:'no-store'});
+      if(m.ok){ const data = await m.json(); if(data) storedMat = data; }
     }catch(e){ /* idem */ }
 
     reservations = storedRes || baseRes;
