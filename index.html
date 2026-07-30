@@ -122,8 +122,18 @@
 
   main{ flex:1; padding:22px 24px 60px 24px; max-width:1180px; width:100%; margin:0 auto; }
 
-  .week-group{ margin-bottom:30px; }
-  .week-title{ font-weight:800; font-size:15px; color:var(--ink); margin-bottom:14px; display:flex; align-items:center; gap:8px;}
+  .week-group{
+    margin-bottom:22px; padding:18px 18px 22px 18px; border-radius:16px;
+    background:var(--paper);
+  }
+  .week-group:nth-child(odd){ background:var(--mist); }
+  .week-title{
+    font-weight:800; font-size:14.5px; color:var(--bordeaux); margin-bottom:16px;
+    display:inline-flex; align-items:center; gap:8px;
+    background:white; border:1.5px solid var(--bordeaux-tint);
+    padding:7px 14px; border-radius:999px;
+    box-shadow:0 1px 2px rgba(0,0,0,.04);
+  }
   .week-title .arrow{ color:var(--bordeaux-light); }
 
   .grid{
