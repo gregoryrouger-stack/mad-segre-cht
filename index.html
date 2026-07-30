@@ -24,7 +24,7 @@
     --warn:#c0392b;
   }
   *{box-sizing:border-box;}
-  html,body{margin:0;padding:0; overflow-x:hidden; width:100%;}
+  html,body{margin:0;padding:0; width:100%;}
   body{ touch-action:pan-y; overscroll-behavior-x:none; }
   #app{ overflow-x:hidden; width:100%; }
   body{
@@ -38,8 +38,7 @@
   #app{flex:1; display:flex; flex-direction:column;}
 
   .sticky-head{
-    position:sticky; top:0; z-index:30;
-    box-shadow:0 4px 12px rgba(0,0,0,.15);
+    /* n'est plus figé : défile normalement avec le contenu */
   }
 
   header.topbar{
@@ -273,7 +272,10 @@
     .search-box{ max-width:none; min-width:0; }
     .btn-filter{ flex-shrink:0; padding:10px 12px; }
     .btn-filter span{ display:none; }
-    #btnReserver, #btnAjouterMat{ width:100%; justify-content:center; }
+    #btnReserver, #btnAjouterMat{
+      position:fixed; right:16px; bottom:calc(78px + env(safe-area-inset-bottom));
+      width:auto; z-index:35; box-shadow:0 6px 18px rgba(0,0,0,.28);
+    }
 
     main{ padding:14px 14px calc(84px + env(safe-area-inset-bottom)) 14px; }
     .grid{ grid-template-columns:repeat(3, 1fr); gap:8px; }
