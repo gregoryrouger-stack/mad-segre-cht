@@ -37,6 +37,11 @@
   }
   #app{flex:1; display:flex; flex-direction:column;}
 
+  .sticky-head{
+    position:sticky; top:0; z-index:30;
+    box-shadow:0 4px 12px rgba(0,0,0,.15);
+  }
+
   header.topbar{
     background:linear-gradient(180deg,var(--bordeaux) 0%, var(--bordeaux-dark) 100%);
     color:white;
@@ -67,6 +72,7 @@
   }
   nav.tabs button:hover{ background:rgba(255,255,255,.08); }
   nav.tabs button.active{ background:var(--paper); color:var(--bordeaux); }
+  nav.tabs .tab-icon{ display:none; }
   nav.tabs .badge{
     background:var(--warn); color:white; font-size:10px; font-weight:800;
     border-radius:999px; padding:1px 6px; margin-left:2px;
@@ -129,10 +135,12 @@
   main{ flex:1; padding:22px 24px 60px 24px; max-width:1180px; width:100%; margin:0 auto; }
 
   .week-group{
-    margin-bottom:22px; padding:18px 18px 22px 18px; border-radius:16px;
-    background:var(--paper);
+    margin-bottom:18px; padding:18px; border-radius:16px;
+    background:white; border:1.5px solid var(--bordeaux-tint);
   }
-  .week-group:nth-child(odd){ background:var(--mist); }
+  .week-group:nth-child(odd){
+    background: #f4eaf1; border-color:transparent;
+  }
   .week-title{
     font-weight:800; font-size:14.5px; color:var(--bordeaux); margin-bottom:16px;
     display:inline-flex; align-items:center; gap:8px;
@@ -147,9 +155,9 @@
   }
   .card{
     background:var(--mist); border-radius:14px; padding:12px; cursor:pointer;
-    border:2px solid transparent; transition:transform .12s ease, border-color .12s ease;
+    border:1.5px solid var(--bordeaux-tint); transition:transform .12s ease, border-color .12s ease;
   }
-  .card:hover{ transform:translateY(-2px); border-color:var(--bordeaux-tint); }
+  .card:hover{ transform:translateY(-2px); border-color:var(--bordeaux); }
   .card .icon-wrap{
     width:100%; aspect-ratio:1; border-radius:12px; overflow:hidden; margin-bottom:10px;
     background:#111; display:flex; align-items:center; justify-content:center;
@@ -231,17 +239,30 @@
   ::-webkit-scrollbar-thumb{ background:#d8cfd6; border-radius:6px; }
 
   @media(max-width:640px){
-    header.topbar{ padding:12px 14px 0 14px; }
-    .brand{ font-size:17px; padding-bottom:10px; }
+    header.topbar{ padding:12px 14px; }
+    .brand{ font-size:17px; padding-bottom:0; }
 
+    /* barre d'onglets fixée en bas de l'écran, façon app native */
     nav.tabs{
-      flex-wrap:nowrap; overflow-x:auto; -webkit-overflow-scrolling:touch;
-      scrollbar-width:none; padding-bottom:2px;
+      position:fixed; left:0; right:0; bottom:0; z-index:40;
+      display:flex; flex-wrap:nowrap; gap:0; justify-content:space-around;
+      background:var(--bordeaux-dark);
+      padding:6px 4px calc(6px + env(safe-area-inset-bottom)) 4px;
+      box-shadow:0 -4px 14px rgba(0,0,0,.2);
+      overflow-x:visible;
     }
-    nav.tabs::-webkit-scrollbar{ display:none; }
     nav.tabs button{
-      padding:9px 11px; font-size:13px; white-space:nowrap; flex-shrink:0;
+      flex:1; flex-shrink:1; flex-direction:column; gap:3px;
+      padding:7px 2px; font-size:10.5px; white-space:nowrap;
+      border-radius:10px; color:rgba(255,255,255,.7);
     }
+    nav.tabs button.active{
+      background:rgba(255,255,255,.14); color:white;
+    }
+    nav.tabs .tab-icon{ display:block; font-size:16px; line-height:1; }
+    nav.tabs .badge{ position:absolute; margin-left:14px; margin-top:-14px; }
+
+    footer.statusbar{ display:none; }
 
     .toolbar{
       padding:12px 14px 16px 14px;
@@ -254,7 +275,7 @@
     .btn-filter span{ display:none; }
     #btnReserver, #btnAjouterMat{ width:100%; justify-content:center; }
 
-    main{ padding:14px 14px 50px 14px; }
+    main{ padding:14px 14px calc(84px + env(safe-area-inset-bottom)) 14px; }
     .grid{ grid-template-columns:repeat(3, 1fr); gap:8px; }
     .card{ padding:9px; border-radius:12px; }
     .card .icon-wrap{ margin-bottom:7px; border-radius:9px; }
@@ -274,18 +295,20 @@
     .res-mini{ padding:9px 10px; }
     .retour-row{ padding:11px 2px; gap:11px; }
 
-    .toast{ left:14px; right:14px; transform:none; bottom:20px; text-align:center; }
-    .toast.show{ bottom:30px; }
+    .toast{ left:14px; right:14px; transform:none; bottom:calc(78px + env(safe-area-inset-bottom)); text-align:center; }
+    .toast.show{ bottom:calc(88px + env(safe-area-inset-bottom)); }
   }
 </style>
 </head>
 <body>
 <div id="app">
-  <header class="topbar">
-    <div class="brand"><div class="logo">MAD</div> MAD Segré / CHT</div>
-    <nav class="tabs" id="tabs"></nav>
-  </header>
-  <div class="toolbar" id="toolbar"></div>
+  <div class="sticky-head">
+    <header class="topbar">
+      <div class="brand"><div class="logo">MAD</div> MAD Segré / CHT</div>
+      <nav class="tabs" id="tabs"></nav>
+    </header>
+    <div class="toolbar" id="toolbar"></div>
+  </div>
   <main id="main"></main>
 </div>
 <footer class="statusbar"></footer>
@@ -481,7 +504,8 @@ MATERIELS_JSON = [{"id": "0f3MGHVYQTSHn4FwKReDZw", "nom": "VW frigo", "categorie
     const pendingCount = reservations.filter(isPending).length;
     tabsEl.innerHTML = TAB_DEFS.map(t => `
       <button data-tab="${t.id}" class="${state.tab===t.id?'active':''}">
-        <span>${t.label}</span>
+        <span class="tab-icon">${t.icon}</span>
+        <span class="tab-label">${t.label}</span>
         ${t.id==='retour' && pendingCount>0 ? `<span class="badge">${pendingCount}</span>` : ''}
       </button>
     `).join('');
