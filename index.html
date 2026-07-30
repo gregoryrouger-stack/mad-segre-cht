@@ -144,6 +144,18 @@
 
   main{ flex:1; padding:22px 24px 60px 24px; max-width:1180px; width:100%; margin:0 auto; }
 
+  .ongoing-block{
+    margin-bottom:22px; border-radius:16px; overflow:hidden;
+    border:1.5px solid var(--bordeaux-light); background:white;
+  }
+  .ongoing-toggle{
+    width:100%; display:flex; align-items:center; justify-content:space-between;
+    gap:10px; padding:14px 18px; background:var(--bordeaux-light); color:white;
+    border:none; cursor:pointer; font-size:14px; font-weight:800; text-align:left;
+  }
+  .ongoing-toggle:hover{ background:var(--bordeaux); }
+  .ongoing-toggle-action{ font-size:14px; font-weight:800; opacity:.9; white-space:nowrap; }
+
   .week-group{
     margin-bottom:18px; padding:18px; border-radius:16px;
     background:white; border:1.5px solid var(--bordeaux-tint);
@@ -366,6 +378,9 @@ MATERIELS_JSON = [{"id": "0f3MGHVYQTSHn4FwKReDZw", "nom": "VW frigo", "categorie
   }
 
   // ---- state ----
+  const STORAGE_KEY_RES = "mad_reservations_v1";
+  const STORAGE_KEY_MAT = "mad_materiels_v1";
+
   let reservations = [];
   let materiels = [];
   let nextId = 100000;
@@ -374,6 +389,8 @@ MATERIELS_JSON = [{"id": "0f3MGHVYQTSHn4FwKReDZw", "nom": "VW frigo", "categorie
   function freshBaseData(){
     const res = RESERVATIONS_JSON.map(r => ({
       ...r,
+      // les réservations déjà marquées "Retour" dans les données d'origine
+      // sont considérées comme déjà rendues, pas comme "à retourner"
       rendu: !!r.retour,
     }));
     const mat = MATERIELS_JSON.map(m => ({...m}));
@@ -382,44 +399,35 @@ MATERIELS_JSON = [{"id": "0f3MGHVYQTSHn4FwKReDZw", "nom": "VW frigo", "categorie
 
   async function persistReservations(){
     try{
-      const r = await fetch('/api/reservations', {
-        method: 'POST', headers: {'Content-Type':'application/json'},
-        body: JSON.stringify(reservations)
-      });
-      if(!r.ok) throw new Error('HTTP '+r.status);
-    }catch(e){
-      console.error("Erreur de sauvegarde (réservations):", e);
-      toast("⚠ Échec de la sauvegarde — vérifie le lien D1 dans les réglages Cloudflare.");
-    }
+      if(window.storage) await window.storage.set(STORAGE_KEY_RES, JSON.stringify(reservations), false);
+    }catch(e){ console.error("Erreur de sauvegarde (réservations):", e); }
   }
   async function persistMateriels(){
     try{
-      const r = await fetch('/api/materiels', {
-        method: 'POST', headers: {'Content-Type':'application/json'},
-        body: JSON.stringify(materiels)
-      });
-      if(!r.ok) throw new Error('HTTP '+r.status);
-    }catch(e){
-      console.error("Erreur de sauvegarde (matériels):", e);
-      toast("⚠ Échec de la sauvegarde — vérifie le lien D1 dans les réglages Cloudflare.");
-    }
+      if(window.storage) await window.storage.set(STORAGE_KEY_MAT, JSON.stringify(materiels), false);
+    }catch(e){ console.error("Erreur de sauvegarde (matériels):", e); }
   }
 
   async function loadData(){
     const {res: baseRes, mat: baseMat} = freshBaseData();
     let storedRes = null, storedMat = null;
     try{
-      const r = await fetch('/api/reservations', {cache:'no-store'});
-      if(r.ok){ const data = await r.json(); if(data) storedRes = data; }
-    }catch(e){}
+      if(window.storage){
+        const r = await window.storage.get(STORAGE_KEY_RES, false);
+        if(r && r.value) storedRes = JSON.parse(r.value);
+      }
+    }catch(e){ /* rien de sauvegardé encore, ou erreur lecture -> on repart de la base */ }
     try{
-      const m = await fetch('/api/materiels', {cache:'no-store'});
-      if(m.ok){ const data = await m.json(); if(data) storedMat = data; }
-    }catch(e){}
+      if(window.storage){
+        const m = await window.storage.get(STORAGE_KEY_MAT, false);
+        if(m && m.value) storedMat = JSON.parse(m.value);
+      }
+    }catch(e){ /* idem */ }
 
     reservations = storedRes || baseRes;
     materiels = storedMat || baseMat;
 
+    // première utilisation : on enregistre la base pour la suite
     if(!storedRes) persistReservations();
     if(!storedMat) persistMateriels();
   }
@@ -429,6 +437,7 @@ MATERIELS_JSON = [{"id": "0f3MGHVYQTSHn4FwKReDZw", "nom": "VW frigo", "categorie
     search: '',
     filters: { categorie:'', materiel:'', magasin:'' },
     selectedMaterielId: null,
+    ongoingCollapsed: true,
   };
 
   function activeFilterCount(){
@@ -549,7 +558,11 @@ MATERIELS_JSON = [{"id": "0f3MGHVYQTSHn4FwKReDZw", "nom": "VW frigo", "categorie
       </button>
     `).join('');
     tabsEl.querySelectorAll('button').forEach(b=>{
-      b.addEventListener('click', ()=>{ state.tab=b.dataset.tab; state.selectedMaterielId=null; render(); });
+      b.addEventListener('click', ()=>{
+        state.tab=b.dataset.tab; state.selectedMaterielId=null;
+        if(b.dataset.tab==='reservations') state.ongoingCollapsed = true;
+        render();
+      });
     });
   }
 
@@ -755,27 +768,74 @@ MATERIELS_JSON = [{"id": "0f3MGHVYQTSHn4FwKReDZw", "nom": "VW frigo", "categorie
   }
 
   function renderReservationsTab(){
-    const upcoming = filteredReservations(reservations.filter(r=> !isPast(r.fin)));
-    if(upcoming.length===0){
+    const upcomingAll = filteredReservations(reservations.filter(r=> !isPast(r.fin)));
+    if(upcomingAll.length===0){
       mainEl.innerHTML = emptyState("Aucune réservation à venir", "Crée une nouvelle réservation avec le bouton « Réserver ».");
       return;
     }
-    upcoming.sort((a,b)=> (a.debut||'').localeCompare(b.debut||''));
-    const groups = {};
-    upcoming.forEach(r=>{
-      const key = r.debut+'|'+r.fin;
-      (groups[key] = groups[key]||[]).push(r);
-    });
-    const keys = Object.keys(groups).sort();
-    mainEl.innerHTML = keys.map(key=>{
-      const [debut,fin] = key.split('|');
-      const items = sortByCategoryThenNumber(groups[key]);
-      return `<div class="week-group">
-        <div class="week-title">${fmtDate(debut)} <span class="arrow">→</span> ${fmtDate(fin)}</div>
-        <div class="grid">${items.map(cardHtml).join('')}</div>
-      </div>`;
-    }).join('');
+
+    // réservations "en cours" : leur période a déjà commencé (début ≤ aujourd'hui)
+    const ongoing = upcomingAll.filter(r=> r.debut && r.debut <= TODAY);
+    const rest = upcomingAll.filter(r=> !(r.debut && r.debut <= TODAY));
+
+    let html = '';
+
+    if(ongoing.length > 0){
+      const ongoingGroups = {};
+      ongoing.forEach(r=>{
+        const key = r.debut+'|'+r.fin;
+        (ongoingGroups[key] = ongoingGroups[key]||[]).push(r);
+      });
+      const ongoingKeys = Object.keys(ongoingGroups).sort();
+      const ongoingContent = ongoingKeys.map(key=>{
+        const [debut,fin] = key.split('|');
+        const items = sortByCategoryThenNumber(ongoingGroups[key]);
+        return `<div class="week-group">
+          <div class="week-title">${fmtDate(debut)} <span class="arrow">→</span> ${fmtDate(fin)}</div>
+          <div class="grid">${items.map(cardHtml).join('')}</div>
+        </div>`;
+      }).join('');
+      html += `
+        <div class="ongoing-block">
+          <button class="ongoing-toggle" id="ongoingToggle">
+            <span class="ongoing-toggle-text">📌 ${ongoing.length} réservation${ongoing.length>1?'s':''} en cours aujourd'hui</span>
+            <span class="ongoing-toggle-action">${state.ongoingCollapsed ? 'Afficher ▾' : 'Réduire ▴'}</span>
+          </button>
+          <div id="ongoingGrid" style="${state.ongoingCollapsed ? 'display:none;' : ''} padding-top:14px;">
+            ${ongoingContent}
+          </div>
+        </div>`;
+    }
+
+    if(rest.length > 0){
+      const groups = {};
+      rest.forEach(r=>{
+        const key = r.debut+'|'+r.fin;
+        (groups[key] = groups[key]||[]).push(r);
+      });
+      const keys = Object.keys(groups).sort();
+      html += keys.map(key=>{
+        const [debut,fin] = key.split('|');
+        const items = sortByCategoryThenNumber(groups[key]);
+        return `<div class="week-group">
+          <div class="week-title">${fmtDate(debut)} <span class="arrow">→</span> ${fmtDate(fin)}</div>
+          <div class="grid">${items.map(cardHtml).join('')}</div>
+        </div>`;
+      }).join('');
+    } else if(ongoing.length > 0){
+      html += `<div style="color:#8a8189; padding:20px 4px;">Aucune autre réservation à venir pour l'instant.</div>`;
+    }
+
+    mainEl.innerHTML = html;
     bindCards();
+
+    const toggleBtn = document.getElementById('ongoingToggle');
+    if(toggleBtn){
+      toggleBtn.addEventListener('click', ()=>{
+        state.ongoingCollapsed = !state.ongoingCollapsed;
+        renderReservationsTab();
+      });
+    }
   }
 
   function renderArchivesTab(){
@@ -878,26 +938,27 @@ MATERIELS_JSON = [{"id": "0f3MGHVYQTSHn4FwKReDZw", "nom": "VW frigo", "categorie
     return order;
   }
 
-  function openMaterielCreateForm(){
+  function openMaterielCreateForm(prefill){
+    prefill = prefill || {};
     const cats = allCategories();
     modal.innerHTML = `
       <div class="modal-head">
-        <div><div class="title">Nouveau matériel</div><div class="sub">Ajouter à une catégorie existante</div></div>
+        <div><div class="title">${prefill.nom?'Dupliquer un matériel':'Nouveau matériel'}</div><div class="sub">${prefill.nom?"Modifie le nom avant d'enregistrer":'Ajouter à une catégorie existante'}</div></div>
         <button class="close-x" id="closeX">✕</button>
       </div>
       <div class="modal-body">
-        <div class="field"><label>Nom</label><input id="fm_nom" placeholder="Ex : TP - 13"/></div>
+        <div class="field"><label>Nom</label><input id="fm_nom" placeholder="Ex : TP - 13" value="${(prefill.nom||'').replace(/"/g,'&quot;')}"/></div>
         <div class="field"><label>Catégorie</label>
-          <select id="fm_cat">${cats.map(c=>`<option>${c}</option>`).join('')}</select>
+          <select id="fm_cat">${cats.map(c=>`<option ${c===prefill.categorie?'selected':''}>${c}</option>`).join('')}</select>
         </div>
         <div class="field"><label>Localisation / statut</label>
-          <select id="fm_lieu">${LIEUX_MATERIEL.map(l=>`<option>${l}</option>`).join('')}</select>
+          <select id="fm_lieu">${LIEUX_MATERIEL.map(l=>`<option ${l===prefill.lieu?'selected':''}>${l}</option>`).join('')}</select>
         </div>
-        <div class="field"><label>Commentaire</label><textarea id="fm_comment" rows="2"></textarea></div>
+        <div class="field"><label>Commentaire</label><textarea id="fm_comment" rows="2">${prefill.commentaire||''}</textarea></div>
       </div>
       <div class="modal-foot">
         <button class="btn btn-ghost" id="cancelBtn">Annuler</button>
-        <button class="btn btn-solid" id="saveBtn">Ajouter</button>
+        <button class="btn btn-solid" id="saveBtn">${prefill.nom?'Dupliquer':'Ajouter'}</button>
       </div>
     `;
     overlay.classList.add('show');
@@ -915,7 +976,8 @@ MATERIELS_JSON = [{"id": "0f3MGHVYQTSHn4FwKReDZw", "nom": "VW frigo", "categorie
       }
       materiels.push({
         id: 'mat-new-'+(nextId++),
-        nom, categorie, lieu, icone:'', photo:'', commentaire
+        nom, categorie, lieu,
+        icone: prefill.icone||'', photo: prefill.photo||'', commentaire
       });
       persistMateriels();
       closeModal();
@@ -952,7 +1014,8 @@ MATERIELS_JSON = [{"id": "0f3MGHVYQTSHn4FwKReDZw", "nom": "VW frigo", "categorie
           <div style="font-weight:700;">${m.categorie}</div>
           <div style="color:#8a8189;font-size:12.5px; margin-top:6px;">📊 Réservé <strong style="color:var(--ink);">${countYear} fois</strong> depuis le 1er janvier ${anneeEnCours}</div>
         </div>
-        <button class="btn btn-solid" style="margin-left:auto;" id="editMatBtn">✎ Modifier</button>
+        <button class="btn btn-ghost" style="margin-left:auto;" id="dupMatBtn">⧉ Dupliquer</button>
+        <button class="btn btn-solid" id="editMatBtn">✎ Modifier</button>
       </div>
       <div style="display:inline-block;${lieuTagStyle(m.lieu)}padding:6px 14px;border-radius:8px;font-weight:700;font-size:13px;margin-bottom:20px;">${m.lieu || 'Non renseigné'}</div>
       ${enPanne && upcoming.length===0 ? `<div class="conflict-tag" style="display:inline-flex;margin-left:10px;">⚠ Indisponible à la réservation</div>` : ''}
@@ -991,6 +1054,16 @@ MATERIELS_JSON = [{"id": "0f3MGHVYQTSHn4FwKReDZw", "nom": "VW frigo", "categorie
     `;
     document.getElementById('backToMat').addEventListener('click', ()=>{ state.selectedMaterielId=null; renderMain(); });
     document.getElementById('editMatBtn').addEventListener('click', ()=> openMaterielForm(m.id));
+    document.getElementById('dupMatBtn').addEventListener('click', ()=>{
+      openMaterielCreateForm({
+        nom: m.nom + ' (copie)',
+        categorie: m.categorie,
+        lieu: 'Segré',
+        icone: m.icone,
+        photo: m.photo,
+        commentaire: m.commentaire
+      });
+    });
     mainEl.querySelectorAll('.res-mini').forEach(el=>{
       el.addEventListener('click', ()=> openReservationDetail(el.dataset.id));
     });
@@ -1006,6 +1079,7 @@ MATERIELS_JSON = [{"id": "0f3MGHVYQTSHn4FwKReDZw", "nom": "VW frigo", "categorie
         <button class="close-x" id="closeX">✕</button>
       </div>
       <div class="modal-body">
+        <div class="field"><label>Nom</label><input id="fm_nom" value="${m.nom.replace(/"/g,'&quot;')}"/></div>
         <div class="field"><label>Localisation / statut</label>
           <select id="fm_lieu">
             ${LIEUX_MATERIEL.map(l=>`<option ${l===m.lieu?'selected':''}>${l}</option>`).join('')}
@@ -1023,6 +1097,21 @@ MATERIELS_JSON = [{"id": "0f3MGHVYQTSHn4FwKReDZw", "nom": "VW frigo", "categorie
     document.getElementById('closeX').addEventListener('click', closeModal);
     document.getElementById('cancelBtn').addEventListener('click', closeModal);
     document.getElementById('saveBtn').addEventListener('click', ()=>{
+      const nouveauNom = document.getElementById('fm_nom').value.trim();
+      if(!nouveauNom){ toast("Le nom ne peut pas être vide."); return; }
+      const ancienNom = m.nom;
+      if(nouveauNom !== ancienNom && materiels.some(x=>x.id!==m.id && x.nom.trim().toLowerCase()===nouveauNom.toLowerCase())){
+        toast("Un autre matériel porte déjà ce nom.");
+        return;
+      }
+      if(nouveauNom !== ancienNom){
+        // on répercute le renommage sur toutes les réservations existantes de ce matériel
+        reservations.forEach(r=>{
+          if(r.materiel.trim().toLowerCase() === ancienNom.trim().toLowerCase()) r.materiel = nouveauNom;
+        });
+        persistReservations();
+      }
+      m.nom = nouveauNom;
       m.lieu = document.getElementById('fm_lieu').value;
       m.commentaire = document.getElementById('fm_comment').value;
       persistMateriels();
@@ -1074,12 +1163,22 @@ MATERIELS_JSON = [{"id": "0f3MGHVYQTSHn4FwKReDZw", "nom": "VW frigo", "categorie
       </div>
       <div class="modal-foot">
         <button class="btn btn-danger" id="delBtn">Supprimer</button>
+        <button class="btn btn-ghost" id="dupBtn">⧉ Dupliquer</button>
         <button class="btn btn-ghost" id="cancelBtn">Annuler</button>
         <button class="btn btn-solid" id="saveBtn">Enregistrer</button>
       </div>
     `;
     overlay.classList.add('show');
     document.getElementById('closeX').addEventListener('click', closeModal);
+    document.getElementById('dupBtn').addEventListener('click', ()=>{
+      openReservationForm(r.materiel, {
+        client: r.client,
+        magasin: r.magasin,
+        commentaire: r.commentaire,
+        debut: r.debut,
+        fin: r.fin
+      });
+    });
     document.getElementById('cancelBtn').addEventListener('click', closeModal);
     document.getElementById('delBtn').addEventListener('click', ()=>{
       reservations = reservations.filter(x=>x.id!==id);
@@ -1155,7 +1254,8 @@ MATERIELS_JSON = [{"id": "0f3MGHVYQTSHn4FwKReDZw", "nom": "VW frigo", "categorie
     }</optgroup>`).join('');
   }
 
-  function openReservationForm(presetMateriel){
+  function openReservationForm(presetMateriel, prefill){
+    prefill = prefill || {};
     modal.innerHTML = `
       <div class="modal-head">
         <div><div class="title">Nouvelle réservation</div><div class="sub">Choisis d'abord les dates</div></div>
@@ -1163,18 +1263,23 @@ MATERIELS_JSON = [{"id": "0f3MGHVYQTSHn4FwKReDZw", "nom": "VW frigo", "categorie
       </div>
       <div class="modal-body">
         <div class="two-col">
-          <div class="field"><label>Début réservation</label><input type="date" id="f_debut"/></div>
-          <div class="field"><label>Fin réservation</label><input type="date" id="f_fin"/></div>
+          <div class="field"><label>Début réservation</label><input type="date" id="f_debut" value="${prefill.debut||''}"/></div>
+          <div class="field"><label>Fin réservation</label><input type="date" id="f_fin" value="${prefill.fin||''}"/></div>
         </div>
         <div class="field">
           <label>Matériel <span id="availCount" style="text-transform:none;font-weight:600;color:#8a8189;"></span></label>
           <select id="f_materiel" disabled><option value="">— Choisis d'abord les dates —</option></select>
         </div>
-        <div class="field"><label>Nom client</label><input id="f_client" placeholder="Nom du client ou de l'association"/></div>
+        <div class="field"><label>Nom client</label><input id="f_client" placeholder="Nom du client ou de l'association" value="${(prefill.client||'').replace(/"/g,'&quot;')}"/></div>
         <div class="field"><label>Magasin</label>
-          <select id="f_magasin"><option value="">Sélectionner une option</option><option>Segré</option><option>CHT</option><option>Sablé</option></select>
+          <select id="f_magasin">
+            <option value="">Sélectionner une option</option>
+            <option ${prefill.magasin==='Segré'?'selected':''}>Segré</option>
+            <option ${prefill.magasin==='CHT'?'selected':''}>CHT</option>
+            <option ${prefill.magasin==='Sablé'?'selected':''}>Sablé</option>
+          </select>
         </div>
-        <div class="field"><label>Commentaire</label><textarea id="f_comment" rows="2"></textarea></div>
+        <div class="field"><label>Commentaire</label><textarea id="f_comment" rows="2">${prefill.commentaire||''}</textarea></div>
       </div>
       <div class="modal-foot">
         <button class="btn btn-ghost" id="cancelBtn">Annuler</button>
