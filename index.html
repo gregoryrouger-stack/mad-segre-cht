@@ -20,7 +20,9 @@
     --warn:#c0392b;
   }
   *{box-sizing:border-box;}
-  html,body{margin:0;padding:0;}
+  html,body{margin:0;padding:0; overflow-x:hidden; width:100%;}
+  body{ touch-action:pan-y; overscroll-behavior-x:none; }
+  #app{ overflow-x:hidden; width:100%; }
   body{
     font-family: 'Segoe UI', Roboto, -apple-system, BlinkMacSystemFont, sans-serif;
     background:var(--paper);
@@ -50,7 +52,7 @@
   }
   nav.tabs{
     display:flex; gap:4px; flex-wrap:wrap;
-    padding-bottom:0;
+    padding-bottom:0; touch-action:pan-x;
   }
   nav.tabs button{
     background:transparent; border:none; color:rgba(255,255,255,.85);
@@ -281,9 +283,6 @@
   </header>
   <div class="toolbar" id="toolbar"></div>
   <main id="main"></main>
-  <div style="text-align:center;padding:6px 0 14px 0;">
-    <button id="resetDataLink" style="background:none;border:none;color:#c7bfc7;font-size:11.5px;cursor:pointer;text-decoration:underline;">Réinitialiser les données de démo</button>
-  </div>
 </div>
 <footer class="statusbar"></footer>
 <div class="overlay" id="overlay"><div class="modal" id="modal"></div></div>
@@ -377,14 +376,6 @@ MATERIELS_JSON = [{"id": "0f3MGHVYQTSHn4FwKReDZw", "nom": "VW frigo", "categorie
     // première utilisation : on enregistre la base dans le KV pour la suite
     if(!storedRes) persistReservations();
     if(!storedMat) persistMateriels();
-  }
-
-  function resetToBaseData(){
-    const {res, mat} = freshBaseData();
-    reservations = res;
-    materiels = mat;
-    persistReservations();
-    persistMateriels();
   }
 
   let state = {
@@ -1184,16 +1175,6 @@ MATERIELS_JSON = [{"id": "0f3MGHVYQTSHn4FwKReDZw", "nom": "VW frigo", "categorie
     await loadData();
     dataReady = true;
     render();
-    const resetLink = document.getElementById('resetDataLink');
-    if(resetLink){
-      resetLink.addEventListener('click', async ()=>{
-        if(confirm("Repartir des données d'origine ? Toutes tes modifications (réservations créées/modifiées, retours cochés, matériels ajoutés) seront perdues.")){
-          resetToBaseData();
-          toast("Données réinitialisées.");
-          render();
-        }
-      });
-    }
   }
 
   boot();
