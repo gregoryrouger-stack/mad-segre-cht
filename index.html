@@ -146,7 +146,7 @@
 
   .ongoing-block{
     margin-bottom:22px; border-radius:16px;
-    border:1.5px solid #2b6cb0; background:#e3eefb;
+    border:1.5px solid #2b6cb0; background:#bcd7f5;
   }
   .ongoing-toggle{
     width:100%; display:flex; align-items:center; justify-content:space-between;
@@ -157,7 +157,7 @@
   .ongoing-toggle:hover{ background:#1e4e82; }
   .ongoing-toggle-action{ font-size:14px; font-weight:800; opacity:.9; white-space:nowrap; }
   .ongoing-block .week-group{ background:white; border-color:#93c5fd; }
-  .ongoing-block .week-group:nth-child(odd){ background:#cfe3f7; border-color:transparent; }
+  .ongoing-block .week-group:nth-child(odd){ background:#a9c9ee; border-color:transparent; }
   .ongoing-block .week-title{ border-color:#93c5fd; color:#1e4e82; }
 
   .week-group{
@@ -182,6 +182,7 @@
   .card{
     background:var(--mist); border-radius:14px; padding:12px; cursor:pointer;
     border:1.5px solid var(--bordeaux-tint); transition:transform .12s ease, border-color .12s ease;
+    min-width:0;
   }
   .card:hover{ transform:translateY(-2px); border-color:var(--bordeaux); }
   .card .icon-wrap{
@@ -196,16 +197,16 @@
   }
   .card .icon-wrap img{ width:100%; height:100%; object-fit:cover; display:block; }
   .holder-badge{
-    margin-top:5px; font-size:10.5px; font-weight:700; color:#1e4e82;
+    width:100%; max-width:100%; margin-top:5px; font-size:10.5px; font-weight:700; color:#1e4e82;
     line-height:1.25; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
   }
   .card .code{ font-size:11px; font-weight:800; color:var(--bordeaux); text-transform:uppercase; letter-spacing:.3px;}
   .card .name{ font-size:13.5px; font-weight:700; line-height:1.25; margin:2px 0; }
   .card .place{ font-size:12px; color:#8a8189; }
-  .card.overdue{ border-color:var(--warn); background:#fbe4e1; }
-  .card.panne{ border-color:#c77a08; background:#fdf1de; }
-  .card.non-revenu{ border-color:#c77a08; background:#fdf1de; }
-  .card.chez-client{ border-color:#2b6cb0; background:#e3eefb; }
+  .card.overdue{ border-color:var(--warn); background:#f3bdb5; }
+  .card.panne{ border-color:#c77a08; background:#f9deae; }
+  .card.non-revenu{ border-color:#c77a08; background:#f9deae; }
+  .card.chez-client{ border-color:#2b6cb0; background:#bcd7f5; }
   .panne-flag{ margin-top:6px; font-size:10.5px; font-weight:800; color:#a5690f; line-height:1.2; }
 
   .cat-block{ margin-bottom:32px; }
@@ -1137,10 +1138,10 @@ MATERIELS_JSON = [{"id": "0f3MGHVYQTSHn4FwKReDZw", "nom": "VW frigo", "categorie
         <button class="btn btn-solid" id="editMatBtn">✎ Modifier</button>
       </div>
       <div style="display:inline-block;${lieuTagStyle(m.lieu)}padding:6px 14px;border-radius:8px;font-weight:700;font-size:13px;margin-bottom:20px;">${m.lieu || 'Non renseigné'}</div>
-      ${(()=>{ const holder = currentHolderFor(m.nom); return holder ? `<div style="display:inline-block;background:#e3eefb;color:#1e4e82;padding:6px 14px;border-radius:8px;font-weight:700;font-size:13px;margin-bottom:20px;margin-left:10px;">📍 Actuellement chez ${holder.client}</div>` : ''; })()}
+      ${(()=>{ const holder = currentHolderFor(m.nom); return holder ? `<div style="display:inline-block;background:#bcd7f5;color:#1e4e82;padding:6px 14px;border-radius:8px;font-weight:700;font-size:13px;margin-bottom:20px;margin-left:10px;">📍 Actuellement chez ${holder.client}</div>` : ''; })()}
       ${enPanne && upcoming.length===0 ? `<div class="conflict-tag" style="display:inline-flex;margin-left:10px;">⚠ Indisponible à la réservation</div>` : ''}
       ${enPanne && upcoming.length>0 ? `
-        <div style="background:#fbe4e1;border:1.5px solid var(--warn);border-radius:12px;padding:14px 16px;margin-bottom:20px;">
+        <div style="background:#f3bdb5;border:1.5px solid var(--warn);border-radius:12px;padding:14px 16px;margin-bottom:20px;">
           <div style="color:var(--warn);font-weight:800;font-size:14px;margin-bottom:10px;">⚠ En panne mais déjà réservé sur ${upcoming.length} période${upcoming.length>1?'s':''} à venir — à signaler au client :</div>
           ${upcoming.map(r=> `
             <div style="display:flex;justify-content:space-between;gap:10px;font-size:13.5px;padding:5px 0;border-top:1px solid rgba(192,57,43,.2);">
@@ -1150,7 +1151,7 @@ MATERIELS_JSON = [{"id": "0f3MGHVYQTSHn4FwKReDZw", "nom": "VW frigo", "categorie
         </div>
       ` : ''}
       ${nonRevenu ? `
-        <div style="background:#fdf1de;border:1.5px solid #c77a08;border-radius:12px;padding:14px 16px;margin-bottom:20px;">
+        <div style="background:#f9deae;border:1.5px solid #c77a08;border-radius:12px;padding:14px 16px;margin-bottom:20px;">
           <div style="color:#a5690f;font-weight:800;font-size:14px;margin-bottom:10px;">⏳ Retour non coché — indisponible à la réservation tant que non confirmé :</div>
           ${pendingReturns.map(r=> `
             <div style="display:flex;justify-content:space-between;gap:10px;font-size:13.5px;padding:5px 0;border-top:1px solid rgba(165,105,15,.2);">
@@ -1306,7 +1307,7 @@ MATERIELS_JSON = [{"id": "0f3MGHVYQTSHn4FwKReDZw", "nom": "VW frigo", "categorie
       </div>
       <div class="modal-body">
         ${blocking.length>0 ? `
-          <div style="background:#fbe4e1;border:1.5px solid var(--warn);border-radius:12px;padding:14px 16px;margin-bottom:16px;">
+          <div style="background:#f3bdb5;border:1.5px solid var(--warn);border-radius:12px;padding:14px 16px;margin-bottom:16px;">
             <div style="color:var(--warn);font-weight:800;font-size:13.5px;margin-bottom:8px;">⚠ Matériel non revenu — réservation précédente non cochée :</div>
             ${blocking.map(b=> `
               <div style="display:flex;justify-content:space-between;gap:10px;font-size:13px;padding:4px 0;border-top:1px solid rgba(192,57,43,.2);">
