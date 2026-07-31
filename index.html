@@ -205,6 +205,7 @@
   .card.overdue{ border-color:var(--warn); background:#fbe4e1; }
   .card.panne{ border-color:#c77a08; background:#fdf1de; }
   .card.non-revenu{ border-color:#c77a08; background:#fdf1de; }
+  .card.chez-client{ border-color:#2b6cb0; background:#e3eefb; }
   .panne-flag{ margin-top:6px; font-size:10.5px; font-weight:800; color:#a5690f; line-height:1.2; }
 
   .cat-block{ margin-bottom:32px; }
@@ -980,8 +981,9 @@ MATERIELS_JSON = [{"id": "0f3MGHVYQTSHn4FwKReDZw", "nom": "VW frigo", "categorie
           const nonRevenu = !panne && hasPendingReturn(m.nom);
           const countYear = countReservationsThisYear(m.nom);
           const holder = currentHolderFor(m.nom);
+          const enCours = !panne && !nonRevenu && holder;
           return `
-          <div class="card ${panne?'overdue':''} ${nonRevenu?'non-revenu':''}" data-id="${m.id}" data-kind="mat">
+          <div class="card ${panne?'overdue':''} ${nonRevenu?'non-revenu':''} ${enCours?'chez-client':''}" data-id="${m.id}" data-kind="mat">
             <div class="icon-wrap">${m.icone?`<img src="${m.icone}" loading="lazy"/>`:''}${countYear>0?`<span class="count-badge">${countYear}×</span>`:''}</div>
             <div class="name">${m.nom}</div>
             <div class="place">${panne ? m.lieu+' ⚠' : (nonRevenu ? 'Non revenu ⏳' : m.lieu)}</div>
