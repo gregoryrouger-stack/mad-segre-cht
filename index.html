@@ -424,17 +424,25 @@ MATERIELS_JSON = [{"id": "0f3MGHVYQTSHn4FwKReDZw", "nom": "VW frigo", "categorie
   async function loadData(){
     const {res: baseRes, mat: baseMat} = freshBaseData();
     let storedRes = null, storedMat = null;
+    // on ne réamorce (et donc on ne réécrit la base) que si le fetch a RÉUSSI et confirmé
+    // qu'il n'y avait vraiment rien -> jamais en cas d'échec réseau/serveur passager,
+    // pour ne jamais effacer des données réelles (ex: retours cochés) suite à un simple aléa
+    let resFetchOk = false, matFetchOk = false;
     try{
       const r = await fetch('/api/reservations', {cache:'no-store'});
-      if(r.ok){ const data = await r.json(); if(data) storedRes = data; }
-    }catch(e){}
+      if(r.ok){ resFetchOk = true; const data = await r.json(); if(data) storedRes = data; }
+    }catch(e){ console.error("Lecture réservations impossible (réseau) :", e); }
     try{
       const m = await fetch('/api/materiels', {cache:'no-store'});
-      if(m.ok){ const data = await m.json(); if(data) storedMat = data; }
-    }catch(e){}
+      if(m.ok){ matFetchOk = true; const data = await m.json(); if(data) storedMat = data; }
+    }catch(e){ console.error("Lecture matériels impossible (réseau) :", e); }
 
     reservations = storedRes || baseRes;
     materiels = storedMat || baseMat;
+
+    if(!resFetchOk || !matFetchOk){
+      toast("⚠ Connexion à la base impossible — données affichées peut-être non à jour.");
+    }
 
     let categorieCorrigee = false;
     reservations.forEach(r=>{
@@ -445,10 +453,12 @@ MATERIELS_JSON = [{"id": "0f3MGHVYQTSHn4FwKReDZw", "nom": "VW frigo", "categorie
       }
     });
 
-    if(!storedRes) persistReservations();
-    if(!storedMat) persistMateriels();
-    if(storedRes && categorieCorrigee) persistReservations();
+    // on ne (re)sème la base que si le fetch a confirmé qu'elle était vraiment vide
+    if(!storedRes && resFetchOk) persistReservations();
+    if(!storedMat && matFetchOk) persistMateriels();
+    if(storedRes && resFetchOk && categorieCorrigee) persistReservations();
   }
+
   let state = {
     tab: 'reservations',
     search: '',
