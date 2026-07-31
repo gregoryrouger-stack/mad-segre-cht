@@ -1456,7 +1456,7 @@ MATERIELS_JSON = [{"id": "0f3MGHVYQTSHn4FwKReDZw", "nom": "VW frigo", "categorie
       ${byCat[c].map(m=>`
         <div class="materiel-picker-item" data-nom="${m.nom.replace(/"/g,'&quot;')}">
           <img src="${m.icone||''}"/>
-          <span>${m.nom}</span>
+          <span>${m.nom}${(m.lieu==='Segré'||m.lieu==='CHT')?` <span style="color:var(--warn);font-weight:600;">(${m.lieu})</span>`:''}</span>
           ${m.nom===selected?'<span style="margin-left:auto;color:var(--bordeaux);font-weight:800;">✓</span>':''}
         </div>`).join('')}
     `).join('');
