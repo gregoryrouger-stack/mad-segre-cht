@@ -791,9 +791,9 @@ MATERIELS_JSON = [{"id": "0f3MGHVYQTSHn4FwKReDZw", "nom": "VW frigo", "categorie
       return;
     }
 
-    // réservations "en cours" : leur période a déjà commencé (début ≤ aujourd'hui)
-    const ongoing = upcomingAll.filter(r=> r.debut && r.debut <= TODAY);
-    const rest = upcomingAll.filter(r=> !(r.debut && r.debut <= TODAY));
+    // réservations "en cours" : leur période a commencé strictement avant aujourd'hui (à partir de J+1)
+    const ongoing = upcomingAll.filter(r=> r.debut && r.debut < TODAY);
+    const rest = upcomingAll.filter(r=> !(r.debut && r.debut < TODAY));
 
     let html = '';
 
@@ -955,6 +955,32 @@ MATERIELS_JSON = [{"id": "0f3MGHVYQTSHn4FwKReDZw", "nom": "VW frigo", "categorie
     return order;
   }
 
+  // lit un fichier image sélectionné, le redimensionne et le compresse en JPEG
+  // pour rester léger (stocké directement dans les données de l'appli)
+  function compressImageFile(file, maxDim, quality){
+    maxDim = maxDim || 900; quality = quality || 0.78;
+    return new Promise((resolve, reject)=>{
+      const reader = new FileReader();
+      reader.onload = (e)=>{
+        const img = new Image();
+        img.onload = ()=>{
+          let w = img.width, h = img.height;
+          if(w >= h && w > maxDim){ h = Math.round(h*maxDim/w); w = maxDim; }
+          else if(h > w && h > maxDim){ w = Math.round(w*maxDim/h); h = maxDim; }
+          const canvas = document.createElement('canvas');
+          canvas.width = w; canvas.height = h;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, w, h);
+          resolve(canvas.toDataURL('image/jpeg', quality));
+        };
+        img.onerror = ()=> reject(new Error('image invalide'));
+        img.src = e.target.result;
+      };
+      reader.onerror = ()=> reject(new Error('lecture du fichier impossible'));
+      reader.readAsDataURL(file);
+    });
+  }
+
   function openMaterielCreateForm(prefill){
     prefill = prefill || {};
     const cats = allCategories();
@@ -971,6 +997,13 @@ MATERIELS_JSON = [{"id": "0f3MGHVYQTSHn4FwKReDZw", "nom": "VW frigo", "categorie
         <div class="field"><label>Localisation / statut</label>
           <select id="fm_lieu">${LIEUX_MATERIEL.map(l=>`<option ${l===prefill.lieu?'selected':''}>${l}</option>`).join('')}</select>
         </div>
+        <div class="field">
+          <label>Photo</label>
+          <div id="fm_photo_preview" style="width:90px;height:90px;border-radius:12px;overflow:hidden;background:#111;margin-bottom:8px;${prefill.icone?'':'display:none;'}">
+            ${prefill.icone?`<img src="${prefill.icone}" style="width:100%;height:100%;object-fit:cover;"/>`:''}
+          </div>
+          <input type="file" id="fm_photo" accept="image/*"/>
+        </div>
         <div class="field"><label>Commentaire</label><textarea id="fm_comment" rows="2">${prefill.commentaire||''}</textarea></div>
       </div>
       <div class="modal-foot">
@@ -981,6 +1014,21 @@ MATERIELS_JSON = [{"id": "0f3MGHVYQTSHn4FwKReDZw", "nom": "VW frigo", "categorie
     overlay.classList.add('show');
     document.getElementById('closeX').addEventListener('click', closeModal);
     document.getElementById('cancelBtn').addEventListener('click', closeModal);
+
+    let newPhotoDataUri = null;
+    document.getElementById('fm_photo').addEventListener('change', async (e)=>{
+      const file = e.target.files[0];
+      if(!file) return;
+      try{
+        newPhotoDataUri = await compressImageFile(file);
+        const preview = document.getElementById('fm_photo_preview');
+        preview.style.display = 'block';
+        preview.innerHTML = `<img src="${newPhotoDataUri}" style="width:100%;height:100%;object-fit:cover;"/>`;
+      }catch(err){
+        toast("Impossible de charger cette image.");
+      }
+    });
+
     document.getElementById('saveBtn').addEventListener('click', ()=>{
       const nom = document.getElementById('fm_nom').value.trim();
       const categorie = document.getElementById('fm_cat').value;
@@ -991,10 +1039,12 @@ MATERIELS_JSON = [{"id": "0f3MGHVYQTSHn4FwKReDZw", "nom": "VW frigo", "categorie
         toast("Un matériel porte déjà ce nom.");
         return;
       }
+      const icone = newPhotoDataUri || prefill.icone || '';
+      const photo = newPhotoDataUri || prefill.photo || '';
       materiels.push({
         id: 'mat-new-'+(nextId++),
         nom, categorie, lieu,
-        icone: prefill.icone||'', photo: prefill.photo||'', commentaire
+        icone, photo, commentaire
       });
       persistMateriels();
       closeModal();
@@ -1102,6 +1152,13 @@ MATERIELS_JSON = [{"id": "0f3MGHVYQTSHn4FwKReDZw", "nom": "VW frigo", "categorie
             ${LIEUX_MATERIEL.map(l=>`<option ${l===m.lieu?'selected':''}>${l}</option>`).join('')}
           </select>
         </div>
+        <div class="field">
+          <label>Photo</label>
+          <div id="fm_photo_preview" style="width:90px;height:90px;border-radius:12px;overflow:hidden;background:#111;margin-bottom:8px;${m.icone?'':'display:none;'}">
+            ${m.icone?`<img src="${m.icone}" style="width:100%;height:100%;object-fit:cover;"/>`:''}
+          </div>
+          <input type="file" id="fm_photo" accept="image/*"/>
+        </div>
         <div class="field"><label>Commentaire</label><textarea id="fm_comment" rows="2">${m.commentaire||''}</textarea></div>
         <div style="font-size:12.5px;color:#8a8189;">Passer le statut à « En panne » retire ce matériel des réservations possibles.</div>
       </div>
@@ -1113,6 +1170,21 @@ MATERIELS_JSON = [{"id": "0f3MGHVYQTSHn4FwKReDZw", "nom": "VW frigo", "categorie
     overlay.classList.add('show');
     document.getElementById('closeX').addEventListener('click', closeModal);
     document.getElementById('cancelBtn').addEventListener('click', closeModal);
+
+    let newPhotoDataUri = null;
+    document.getElementById('fm_photo').addEventListener('change', async (e)=>{
+      const file = e.target.files[0];
+      if(!file) return;
+      try{
+        newPhotoDataUri = await compressImageFile(file);
+        const preview = document.getElementById('fm_photo_preview');
+        preview.style.display = 'block';
+        preview.innerHTML = `<img src="${newPhotoDataUri}" style="width:100%;height:100%;object-fit:cover;"/>`;
+      }catch(err){
+        toast("Impossible de charger cette image.");
+      }
+    });
+
     document.getElementById('saveBtn').addEventListener('click', ()=>{
       const nouveauNom = document.getElementById('fm_nom').value.trim();
       if(!nouveauNom){ toast("Le nom ne peut pas être vide."); return; }
@@ -1131,6 +1203,15 @@ MATERIELS_JSON = [{"id": "0f3MGHVYQTSHn4FwKReDZw", "nom": "VW frigo", "categorie
       m.nom = nouveauNom;
       m.lieu = document.getElementById('fm_lieu').value;
       m.commentaire = document.getElementById('fm_comment').value;
+      if(newPhotoDataUri){
+        m.icone = newPhotoDataUri;
+        m.photo = newPhotoDataUri;
+        // on met aussi à jour l'icône affichée sur les réservations existantes de ce matériel
+        reservations.forEach(r=>{
+          if(r.materiel.trim().toLowerCase() === m.nom.trim().toLowerCase()) r.icone = newPhotoDataUri;
+        });
+        persistReservations();
+      }
       persistMateriels();
       closeModal(); toast("Matériel mis à jour ✓"); renderMain();
     });
