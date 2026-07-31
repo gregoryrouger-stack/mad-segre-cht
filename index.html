@@ -257,6 +257,24 @@
   .res-mini .rm-date{ font-size:12px; color:#8a8189; }
   .res-mini .chev{ margin-left:auto; color:#c7bfc7; }
 
+  .materiel-picker-btn{
+    width:100%; text-align:left; padding:11px 12px; border-radius:10px;
+    border:1.5px solid var(--line); background:var(--mist); font-size:14px;
+    font-family:inherit; cursor:pointer; color:var(--ink);
+  }
+  .materiel-picker-btn:disabled{ opacity:.55; cursor:not-allowed; }
+  .materiel-picker-list{
+    margin-top:8px; max-height:260px; overflow-y:auto;
+    border:1.5px solid var(--line); border-radius:10px; background:white;
+  }
+  .materiel-picker-cat{
+    font-size:11px; font-weight:800; color:#8a8189; padding:9px 12px 4px 12px;
+    text-transform:uppercase; letter-spacing:.3px;
+  }
+  .materiel-picker-item{ display:flex; align-items:center; gap:10px; padding:8px 12px; cursor:pointer; }
+  .materiel-picker-item:hover{ background:var(--mist); }
+  .materiel-picker-item img{ width:32px; height:32px; border-radius:7px; object-fit:cover; background:#111; flex-shrink:0; }
+
   .conflict-tag{
     display:inline-flex; align-items:center; gap:5px; background:#fdecea; color:var(--warn);
     font-size:12px; font-weight:700; padding:4px 9px; border-radius:8px; margin-bottom:14px;
@@ -1279,7 +1297,8 @@ MATERIELS_JSON = [{"id": "0f3MGHVYQTSHn4FwKReDZw", "nom": "VW frigo", "categorie
           <div class="field"><label>Fin</label><input type="date" id="f_fin" value="${r.fin||''}"/></div>
         </div>
         <div class="field"><label>Matériel <span id="availCount" style="text-transform:none;font-weight:600;color:#8a8189;"></span></label>
-          <select id="f_materiel"></select>
+          <button type="button" id="f_materiel_btn" class="materiel-picker-btn"></button>
+          <div id="f_materiel_list" class="materiel-picker-list" style="display:none;"></div>
         </div>
         <div class="field"><label>Magasin</label>
           <select id="f_magasin">
@@ -1316,15 +1335,32 @@ MATERIELS_JSON = [{"id": "0f3MGHVYQTSHn4FwKReDZw", "nom": "VW frigo", "categorie
 
     const debutInput = document.getElementById('f_debut');
     const finInput = document.getElementById('f_fin');
-    const matSelect = document.getElementById('f_materiel');
+    const materielBtn = document.getElementById('f_materiel_btn');
+    const materielList = document.getElementById('f_materiel_list');
     const availCount = document.getElementById('availCount');
     const conflictBox = document.getElementById('conflictBox');
+    let selectedMateriel = r.materiel;
+
+    materielBtn.addEventListener('click', ()=>{
+      materielList.style.display = materielList.style.display==='none' ? 'block' : 'none';
+    });
+
+    function bindPickerItems(){
+      materielList.querySelectorAll('.materiel-picker-item').forEach(item=>{
+        item.addEventListener('click', ()=>{
+          selectedMateriel = item.dataset.nom;
+          materielBtn.textContent = selectedMateriel;
+          materielList.style.display = 'none';
+          refreshAvailability();
+        });
+      });
+    }
 
     function refreshAvailability(){
       const debut = debutInput.value, fin = finInput.value;
       conflictBox.innerHTML = '';
       if(!debut || !fin || fin < debut){
-        matSelect.innerHTML = `<option value="">${!debut||!fin?'— dates manquantes —':'fin avant début'}</option>`;
+        materielBtn.textContent = !debut||!fin ? '— dates manquantes —' : 'fin avant début';
         availCount.textContent = '';
         return;
       }
@@ -1338,20 +1374,21 @@ MATERIELS_JSON = [{"id": "0f3MGHVYQTSHn4FwKReDZw", "nom": "VW frigo", "categorie
         if(cur) list = [cur, ...avail];
       }
       availCount.textContent = `(${avail.length} disponible${avail.length>1?'s':''} sur ${materiels.length})`;
-      matSelect.innerHTML = materielOptionsHtml(list, matSelect.value || r.materiel);
-      const conflict = findConflict(matSelect.value || r.materiel, debut, fin, id);
+      materielBtn.textContent = selectedMateriel || r.materiel;
+      materielList.innerHTML = materielPickerListHtml(list, selectedMateriel || r.materiel);
+      bindPickerItems();
+      const conflict = findConflict(selectedMateriel || r.materiel, debut, fin, id);
       if(conflict){
         conflictBox.innerHTML = `<div class="conflict-tag">⚠ Déjà réservé par ${conflict.client} sur cette période</div>`;
       }
     }
-    matSelect.addEventListener('change', refreshAvailability);
     debutInput.addEventListener('change', refreshAvailability);
     finInput.addEventListener('change', refreshAvailability);
     refreshAvailability();
 
     document.getElementById('saveBtn').addEventListener('click', ()=>{
       const debut = debutInput.value, fin = finInput.value;
-      const materielNom = matSelect.value || r.materiel;
+      const materielNom = selectedMateriel || r.materiel;
       if(!debut || !fin || fin < debut){ toast("Vérifie les dates de réservation."); return; }
       const conflict = findConflict(materielNom, debut, fin, id);
       if(conflict){
@@ -1382,6 +1419,23 @@ MATERIELS_JSON = [{"id": "0f3MGHVYQTSHn4FwKReDZw", "nom": "VW frigo", "categorie
     }</optgroup>`).join('');
   }
 
+  // liste déroulante personnalisée (avec photo) pour choisir un matériel —
+  // un <select> natif ne peut pas afficher d'images dans ses options
+  function materielPickerListHtml(list, selected){
+    const byCat = {};
+    list.forEach(m=>{ (byCat[m.categorie]=byCat[m.categorie]||[]).push(m); });
+    const cats = CAT_ORDER.filter(c=>byCat[c]).concat(Object.keys(byCat).filter(c=>!CAT_ORDER.includes(c)));
+    return cats.map(c => `
+      <div class="materiel-picker-cat">${c}</div>
+      ${byCat[c].map(m=>`
+        <div class="materiel-picker-item" data-nom="${m.nom.replace(/"/g,'&quot;')}">
+          <img src="${m.icone||''}"/>
+          <span>${m.nom}</span>
+          ${m.nom===selected?'<span style="margin-left:auto;color:var(--bordeaux);font-weight:800;">✓</span>':''}
+        </div>`).join('')}
+    `).join('');
+  }
+
   function openReservationForm(presetMateriel, prefill){
     prefill = prefill || {};
     modal.innerHTML = `
@@ -1396,7 +1450,8 @@ MATERIELS_JSON = [{"id": "0f3MGHVYQTSHn4FwKReDZw", "nom": "VW frigo", "categorie
         </div>
         <div class="field">
           <label>Matériel <span id="availCount" style="text-transform:none;font-weight:600;color:#8a8189;"></span></label>
-          <select id="f_materiel" disabled><option value="">— Choisis d'abord les dates —</option></select>
+          <button type="button" id="f_materiel_btn" class="materiel-picker-btn" disabled>— Choisis d'abord les dates —</button>
+          <div id="f_materiel_list" class="materiel-picker-list" style="display:none;"></div>
         </div>
         <div class="field"><label>Nom client</label><input id="f_client" placeholder="Nom du client ou de l'association" value="${(prefill.client||'').replace(/"/g,'&quot;')}"/></div>
         <div class="field"><label>Magasin</label>
@@ -1420,41 +1475,66 @@ MATERIELS_JSON = [{"id": "0f3MGHVYQTSHn4FwKReDZw", "nom": "VW frigo", "categorie
 
     const debutInput = document.getElementById('f_debut');
     const finInput = document.getElementById('f_fin');
-    const matSelect = document.getElementById('f_materiel');
+    const materielBtn = document.getElementById('f_materiel_btn');
+    const materielList = document.getElementById('f_materiel_list');
     const availCount = document.getElementById('availCount');
+    let selectedMateriel = '';
+
+    materielBtn.addEventListener('click', ()=>{
+      if(materielBtn.disabled) return;
+      materielList.style.display = materielList.style.display==='none' ? 'block' : 'none';
+    });
+
+    function bindPickerItems(){
+      materielList.querySelectorAll('.materiel-picker-item').forEach(item=>{
+        item.addEventListener('click', ()=>{
+          selectedMateriel = item.dataset.nom;
+          materielBtn.textContent = selectedMateriel;
+          materielList.style.display = 'none';
+        });
+      });
+    }
 
     function refreshAvailability(){
       const debut = debutInput.value, fin = finInput.value;
+      materielList.style.display = 'none';
       if(!debut || !fin){
-        matSelect.disabled = true;
-        matSelect.innerHTML = `<option value="">— Choisis d'abord les dates —</option>`;
+        materielBtn.disabled = true;
+        materielBtn.textContent = "— Choisis d'abord les dates —";
         availCount.textContent = '';
+        selectedMateriel = '';
         return;
       }
       if(fin < debut){
-        matSelect.disabled = true;
-        matSelect.innerHTML = `<option value="">La date de fin précède le début</option>`;
+        materielBtn.disabled = true;
+        materielBtn.textContent = "La date de fin précède le début";
         availCount.textContent = '';
+        selectedMateriel = '';
         return;
       }
       const avail = availableMateriels(debut, fin, null);
       const total = materiels.length;
       availCount.textContent = `(${avail.length} disponible${avail.length>1?'s':''} sur ${total})`;
       if(avail.length===0){
-        matSelect.disabled = true;
-        matSelect.innerHTML = `<option value="">Aucun matériel disponible sur ces dates</option>`;
+        materielBtn.disabled = true;
+        materielBtn.textContent = "Aucun matériel disponible sur ces dates";
+        selectedMateriel = '';
         return;
       }
-      matSelect.disabled = false;
+      materielBtn.disabled = false;
       const stillAvail = presetMateriel && avail.some(m=>m.nom===presetMateriel);
-      matSelect.innerHTML = `<option value="">— Sélectionner —</option>` + materielOptionsHtml(avail, stillAvail?presetMateriel:null);
+      if(stillAvail && !selectedMateriel) selectedMateriel = presetMateriel;
+      if(selectedMateriel && !avail.some(m=>m.nom===selectedMateriel)) selectedMateriel = '';
+      materielBtn.textContent = selectedMateriel || "— Sélectionner —";
+      materielList.innerHTML = materielPickerListHtml(avail, selectedMateriel);
+      bindPickerItems();
     }
 
     debutInput.addEventListener('change', refreshAvailability);
     finInput.addEventListener('change', refreshAvailability);
 
     document.getElementById('saveBtn').addEventListener('click', ()=>{
-      const materielNom = matSelect.value;
+      const materielNom = selectedMateriel;
       const client = document.getElementById('f_client').value.trim();
       const magasin = document.getElementById('f_magasin').value;
       const debut = debutInput.value;
