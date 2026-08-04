@@ -490,6 +490,26 @@ MATERIELS_JSON = [{"id": "0f3MGHVYQTSHn4FwKReDZw", "nom": "VW frigo", "categorie
     if(storedRes && resFetchOk && categorieCorrigee) persistReservations();
   }
 
+  // marque une réservation comme rendue directement côté serveur (via /api/mark-rendu)
+  // pour éviter qu'un appareil resté ouvert avec des données périmées n'écrase
+  // les coches faites entre-temps par quelqu'un d'autre
+  async function markRenduOnServer(id, rendu){
+    try{
+      const res = await fetch('/api/mark-rendu', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ id, rendu })
+      });
+      if(!res.ok) throw new Error('HTTP '+res.status);
+      const data = await res.json();
+      if(data && data.ok && data.reservations) return data.reservations;
+    }catch(e){
+      console.error("Erreur marquage rendu:", e);
+      toast("⚠ Échec de la synchronisation du retour — vérifie ta connexion et réessaie.");
+    }
+    return null;
+  }
+
   let state = {
     tab: 'reservations',
     search: '',
@@ -956,7 +976,11 @@ MATERIELS_JSON = [{"id": "0f3MGHVYQTSHn4FwKReDZw", "nom": "VW frigo", "categorie
       btn.addEventListener('click', (e)=>{
         e.stopPropagation();
         const r = reservations.find(x=>x.id===btn.dataset.check);
-        if(r){ r.rendu = true; persistReservations(); toast(`${r.client} — matériel rendu ✓`); renderMain(); renderTabs(); }
+        if(r){
+          r.rendu = true; renderMain(); renderTabs(); // mise à jour immédiate de l'affichage
+          toast(`${r.client} — matériel rendu ✓`);
+          markRenduOnServer(r.id, true).then(freshList=>{ if(freshList){ reservations = freshList; } });
+        }
       });
     });
     mainEl.querySelectorAll('.retour-row').forEach(row=>{
