@@ -510,6 +510,49 @@ MATERIELS_JSON = [{"id": "0f3MGHVYQTSHn4FwKReDZw", "nom": "VW frigo", "categorie
     return null;
   }
 
+  // applique une opération (créer/modifier/supprimer une réservation, ou renommer
+  // un matériel sur toutes ses réservations) directement côté serveur
+  async function reservationOp(op, id, patch, item){
+    try{
+      const res = await fetch('/api/reservation-op', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ op, id, patch, item })
+      });
+      const data = await res.json().catch(()=>null);
+      if(!res.ok){
+        toast(data && data.error ? `⚠ ${data.error}` : "⚠ Échec de l'enregistrement.");
+        return null;
+      }
+      if(data && data.ok && data.reservations) return data.reservations;
+    }catch(e){
+      console.error("Erreur opération réservation:", e);
+      toast("⚠ Échec de l'enregistrement — vérifie ta connexion et réessaie.");
+    }
+    return null;
+  }
+
+  // applique une opération (créer/modifier un matériel) directement côté serveur
+  async function materielOp(op, id, patch, item){
+    try{
+      const res = await fetch('/api/materiel-op', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ op, id, patch, item })
+      });
+      const data = await res.json().catch(()=>null);
+      if(!res.ok){
+        toast(data && data.error ? `⚠ ${data.error}` : "⚠ Échec de l'enregistrement.");
+        return null;
+      }
+      if(data && data.ok && data.materiels) return data.materiels;
+    }catch(e){
+      console.error("Erreur opération matériel:", e);
+      toast("⚠ Échec de l'enregistrement — vérifie ta connexion et réessaie.");
+    }
+    return null;
+  }
+
   let state = {
     tab: 'reservations',
     search: '',
@@ -1106,7 +1149,7 @@ MATERIELS_JSON = [{"id": "0f3MGHVYQTSHn4FwKReDZw", "nom": "VW frigo", "categorie
       }
     });
 
-    document.getElementById('saveBtn').addEventListener('click', ()=>{
+    document.getElementById('saveBtn').addEventListener('click', async ()=>{
       const nom = document.getElementById('fm_nom').value.trim();
       const categorie = document.getElementById('fm_cat').value;
       const lieu = document.getElementById('fm_lieu').value;
@@ -1118,12 +1161,13 @@ MATERIELS_JSON = [{"id": "0f3MGHVYQTSHn4FwKReDZw", "nom": "VW frigo", "categorie
       }
       const icone = newPhotoDataUri || prefill.icone || '';
       const photo = newPhotoDataUri || prefill.photo || '';
-      materiels.push({
+      const newItem = {
         id: 'mat-new-'+(nextId++),
         nom, categorie, lieu,
         icone, photo, commentaire
-      });
-      persistMateriels();
+      };
+      const freshList = await materielOp('create', null, null, newItem);
+      if(freshList) materiels = freshList;
       closeModal();
       toast(`« ${nom} » ajouté à « ${categorie} » ✓`);
       renderMain();
@@ -1263,7 +1307,7 @@ MATERIELS_JSON = [{"id": "0f3MGHVYQTSHn4FwKReDZw", "nom": "VW frigo", "categorie
       }
     });
 
-    document.getElementById('saveBtn').addEventListener('click', ()=>{
+    document.getElementById('saveBtn').addEventListener('click', async ()=>{
       const nouveauNom = document.getElementById('fm_nom').value.trim();
       if(!nouveauNom){ toast("Le nom ne peut pas être vide."); return; }
       const ancienNom = m.nom;
@@ -1271,26 +1315,25 @@ MATERIELS_JSON = [{"id": "0f3MGHVYQTSHn4FwKReDZw", "nom": "VW frigo", "categorie
         toast("Un autre matériel porte déjà ce nom.");
         return;
       }
-      if(nouveauNom !== ancienNom){
-        // on répercute le renommage sur toutes les réservations existantes de ce matériel
-        reservations.forEach(r=>{
-          if(r.materiel.trim().toLowerCase() === ancienNom.trim().toLowerCase()) r.materiel = nouveauNom;
-        });
-        persistReservations();
+      const patch = {
+        nom: nouveauNom,
+        lieu: document.getElementById('fm_lieu').value,
+        commentaire: document.getElementById('fm_comment').value,
+      };
+      if(newPhotoDataUri){ patch.icone = newPhotoDataUri; patch.photo = newPhotoDataUri; }
+
+      const freshMat = await materielOp('update', m.id, patch, null);
+      if(!freshMat) return; // erreur déjà affichée par materielOp
+      materiels = freshMat;
+
+      if(nouveauNom !== ancienNom || newPhotoDataUri){
+        // on répercute le renommage / la nouvelle photo sur toutes les réservations existantes de ce matériel
+        const freshRes = await reservationOp('rename-materiel', null, {
+          oldName: ancienNom, newName: nouveauNom, newIcone: newPhotoDataUri || null
+        }, null);
+        if(freshRes) reservations = freshRes;
       }
-      m.nom = nouveauNom;
-      m.lieu = document.getElementById('fm_lieu').value;
-      m.commentaire = document.getElementById('fm_comment').value;
-      if(newPhotoDataUri){
-        m.icone = newPhotoDataUri;
-        m.photo = newPhotoDataUri;
-        // on met aussi à jour l'icône affichée sur les réservations existantes de ce matériel
-        reservations.forEach(r=>{
-          if(r.materiel.trim().toLowerCase() === m.nom.trim().toLowerCase()) r.icone = newPhotoDataUri;
-        });
-        persistReservations();
-      }
-      persistMateriels();
+
       closeModal(); toast("Matériel mis à jour ✓"); renderMain();
     });
   }
@@ -1377,9 +1420,9 @@ MATERIELS_JSON = [{"id": "0f3MGHVYQTSHn4FwKReDZw", "nom": "VW frigo", "categorie
       });
     });
     document.getElementById('cancelBtn').addEventListener('click', closeModal);
-    document.getElementById('delBtn').addEventListener('click', ()=>{
-      reservations = reservations.filter(x=>x.id!==id);
-      persistReservations();
+    document.getElementById('delBtn').addEventListener('click', async ()=>{
+      const freshList = await reservationOp('delete', id, null, null);
+      if(freshList) reservations = freshList;
       closeModal(); toast("Réservation supprimée."); render();
     });
 
@@ -1436,7 +1479,7 @@ MATERIELS_JSON = [{"id": "0f3MGHVYQTSHn4FwKReDZw", "nom": "VW frigo", "categorie
     finInput.addEventListener('change', refreshAvailability);
     refreshAvailability();
 
-    document.getElementById('saveBtn').addEventListener('click', ()=>{
+    document.getElementById('saveBtn').addEventListener('click', async ()=>{
       const debut = debutInput.value, fin = finInput.value;
       const materielNom = selectedMateriel || r.materiel;
       if(!debut || !fin || fin < debut){ toast("Vérifie les dates de réservation."); return; }
@@ -1445,17 +1488,20 @@ MATERIELS_JSON = [{"id": "0f3MGHVYQTSHn4FwKReDZw", "nom": "VW frigo", "categorie
         toast(`Impossible : déjà réservé par ${conflict.client} sur cette période.`);
         return;
       }
-      r.client = document.getElementById('f_client').value.trim() || r.client;
-      r.materiel = materielNom;
-      r.magasin = document.getElementById('f_magasin').value;
-      r.debut = debut;
-      r.fin = fin;
-      r.commentaire = document.getElementById('f_comment').value;
+      const matched = materielByName(materielNom);
+      const patch = {
+        client: document.getElementById('f_client').value.trim() || r.client,
+        materiel: materielNom,
+        magasin: document.getElementById('f_magasin').value,
+        debut, fin,
+        commentaire: document.getElementById('f_comment').value,
+        icone: matched ? matched.icone : r.icone,
+        categorie: matched ? matched.categorie : r.categorie,
+      };
       const rd = document.getElementById('f_rendu');
-      if(rd) r.rendu = rd.checked;
-      const matched = materielByName(r.materiel);
-      if(matched){ r.icone = matched.icone; r.categorie = matched.categorie; }
-      persistReservations();
+      if(rd) patch.rendu = rd.checked;
+      const freshList = await reservationOp('update', id, patch, null);
+      if(freshList) reservations = freshList;
       closeModal(); toast("Réservation mise à jour."); render();
     });
   }
@@ -1583,7 +1629,7 @@ MATERIELS_JSON = [{"id": "0f3MGHVYQTSHn4FwKReDZw", "nom": "VW frigo", "categorie
     debutInput.addEventListener('change', refreshAvailability);
     finInput.addEventListener('change', refreshAvailability);
 
-    document.getElementById('saveBtn').addEventListener('click', ()=>{
+    document.getElementById('saveBtn').addEventListener('click', async ()=>{
       const materielNom = selectedMateriel;
       const client = document.getElementById('f_client').value.trim();
       const magasin = document.getElementById('f_magasin').value;
@@ -1603,7 +1649,7 @@ MATERIELS_JSON = [{"id": "0f3MGHVYQTSHn4FwKReDZw", "nom": "VW frigo", "categorie
         return;
       }
       const matched = materielByName(materielNom);
-      reservations.push({
+      const newItem = {
         id: 'new-'+(nextId++),
         client, materiel: materielNom, magasin, debut, fin,
         categorie: matched?matched.categorie:'',
@@ -1611,8 +1657,9 @@ MATERIELS_JSON = [{"id": "0f3MGHVYQTSHn4FwKReDZw", "nom": "VW frigo", "categorie
         retour:false, rendu:false, conflit:false,
         commentaire: document.getElementById('f_comment').value,
         futs:''
-      });
-      persistReservations();
+      };
+      const freshList = await reservationOp('create', null, null, newItem);
+      if(freshList) reservations = freshList;
       closeModal(); toast("Réservation créée ✓"); render();
     });
 
