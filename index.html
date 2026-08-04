@@ -302,6 +302,17 @@
     .topbar-logo{ display:none; }
     .brand{ font-size:17px; padding-bottom:0; }
 
+    /* pied de modale : les boutons passent sur deux lignes plutôt que de déborder */
+    .modal-foot{
+      flex-wrap:wrap;
+    }
+    .modal-foot .btn{
+      flex:1 1 calc(50% - 5px);
+      min-width:0;
+      text-align:center;
+      justify-content:center;
+    }
+
     /* barre d'onglets fixée en bas de l'écran, façon app native */
     nav.tabs{
       position:fixed; left:0; right:0; bottom:0; z-index:40;
