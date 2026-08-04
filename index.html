@@ -413,6 +413,9 @@ MATERIELS_JSON = [{"id": "0f3MGHVYQTSHn4FwKReDZw", "nom": "VW frigo", "categorie
   }
 
   // ---- state ----
+  const STORAGE_KEY_RES = "mad_reservations_v1";
+  const STORAGE_KEY_MAT = "mad_materiels_v1";
+
   let reservations = [];
   let materiels = [];
   let nextId = 100000;
@@ -421,6 +424,8 @@ MATERIELS_JSON = [{"id": "0f3MGHVYQTSHn4FwKReDZw", "nom": "VW frigo", "categorie
   function freshBaseData(){
     const res = RESERVATIONS_JSON.map(r => ({
       ...r,
+      // les réservations déjà marquées "Retour" dans les données d'origine
+      // sont considérées comme déjà rendues, pas comme "à retourner"
       rendu: !!r.retour,
     }));
     const mat = MATERIELS_JSON.map(m => ({...m}));
@@ -429,52 +434,36 @@ MATERIELS_JSON = [{"id": "0f3MGHVYQTSHn4FwKReDZw", "nom": "VW frigo", "categorie
 
   async function persistReservations(){
     try{
-      const r = await fetch('/api/reservations', {
-        method: 'POST', headers: {'Content-Type':'application/json'},
-        body: JSON.stringify(reservations)
-      });
-      if(!r.ok) throw new Error('HTTP '+r.status);
-    }catch(e){
-      console.error("Erreur de sauvegarde (réservations):", e);
-      toast("⚠ Échec de la sauvegarde — vérifie le lien D1 dans les réglages Cloudflare.");
-    }
+      if(window.storage) await window.storage.set(STORAGE_KEY_RES, JSON.stringify(reservations), false);
+    }catch(e){ console.error("Erreur de sauvegarde (réservations):", e); }
   }
   async function persistMateriels(){
     try{
-      const r = await fetch('/api/materiels', {
-        method: 'POST', headers: {'Content-Type':'application/json'},
-        body: JSON.stringify(materiels)
-      });
-      if(!r.ok) throw new Error('HTTP '+r.status);
-    }catch(e){
-      console.error("Erreur de sauvegarde (matériels):", e);
-      toast("⚠ Échec de la sauvegarde — vérifie le lien D1 dans les réglages Cloudflare.");
-    }
+      if(window.storage) await window.storage.set(STORAGE_KEY_MAT, JSON.stringify(materiels), false);
+    }catch(e){ console.error("Erreur de sauvegarde (matériels):", e); }
   }
 
   async function loadData(){
     const {res: baseRes, mat: baseMat} = freshBaseData();
     let storedRes = null, storedMat = null;
-    // on ne réamorce (et donc on ne réécrit la base) que si le fetch a RÉUSSI et confirmé
-    // qu'il n'y avait vraiment rien -> jamais en cas d'échec réseau/serveur passager,
-    // pour ne jamais effacer des données réelles (ex: retours cochés) suite à un simple aléa
-    let resFetchOk = false, matFetchOk = false;
     try{
-      const r = await fetch('/api/reservations', {cache:'no-store'});
-      if(r.ok){ resFetchOk = true; const data = await r.json(); if(data) storedRes = data; }
-    }catch(e){ console.error("Lecture réservations impossible (réseau) :", e); }
+      if(window.storage){
+        const r = await window.storage.get(STORAGE_KEY_RES, false);
+        if(r && r.value) storedRes = JSON.parse(r.value);
+      }
+    }catch(e){ /* rien de sauvegardé encore, ou erreur lecture -> on repart de la base */ }
     try{
-      const m = await fetch('/api/materiels', {cache:'no-store'});
-      if(m.ok){ matFetchOk = true; const data = await m.json(); if(data) storedMat = data; }
-    }catch(e){ console.error("Lecture matériels impossible (réseau) :", e); }
+      if(window.storage){
+        const m = await window.storage.get(STORAGE_KEY_MAT, false);
+        if(m && m.value) storedMat = JSON.parse(m.value);
+      }
+    }catch(e){ /* idem */ }
 
     reservations = storedRes || baseRes;
     materiels = storedMat || baseMat;
 
-    if(!resFetchOk || !matFetchOk){
-      toast("⚠ Connexion à la base impossible — données affichées peut-être non à jour.");
-    }
-
+    // corrige les réservations dont la catégorie enregistrée ne correspond plus
+    // à la catégorie actuelle de leur matériel (ex: matériel changé sans mise à jour)
     let categorieCorrigee = false;
     reservations.forEach(r=>{
       const mat = materiels.find(m => m.nom.trim().toLowerCase() === (r.materiel||'').trim().toLowerCase());
@@ -484,10 +473,10 @@ MATERIELS_JSON = [{"id": "0f3MGHVYQTSHn4FwKReDZw", "nom": "VW frigo", "categorie
       }
     });
 
-    // on ne (re)sème la base que si le fetch a confirmé qu'elle était vraiment vide
-    if(!storedRes && resFetchOk) persistReservations();
-    if(!storedMat && matFetchOk) persistMateriels();
-    if(storedRes && resFetchOk && categorieCorrigee) persistReservations();
+    // première utilisation : on enregistre la base pour la suite
+    if(!storedRes) persistReservations();
+    if(!storedMat) persistMateriels();
+    if(storedRes && categorieCorrigee) persistReservations();
   }
 
   let state = {
@@ -906,9 +895,9 @@ MATERIELS_JSON = [{"id": "0f3MGHVYQTSHn4FwKReDZw", "nom": "VW frigo", "categorie
   }
 
   function renderArchivesTab(){
-    const past = filteredReservations(reservations.filter(r=> isPast(r.fin)));
+    const past = filteredReservations(reservations.filter(r=> r.rendu === true));
     if(past.length===0){
-      mainEl.innerHTML = emptyState("Aucune archive", "Les réservations passées apparaîtront ici.");
+      mainEl.innerHTML = emptyState("Aucune archive", "Les réservations cochées comme rendues apparaîtront ici.");
       return;
     }
     const groups = {};
