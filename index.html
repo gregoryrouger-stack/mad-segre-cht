@@ -437,6 +437,12 @@ MATERIELS_JSON = [{"id": "0f3MGHVYQTSHn4FwKReDZw", "nom": "VW frigo", "categorie
   let nextId = 100000;
   let dataReady = false;
 
+  // identifiant vraiment unique (horodatage + composant aléatoire), pour éviter
+  // toute collision entre deux appareils qui créeraient chacun un élément au même moment
+  function uniqueId(prefix){
+    return prefix + '-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2,8);
+  }
+
   function freshBaseData(){
     const res = RESERVATIONS_JSON.map(r => ({
       ...r,
