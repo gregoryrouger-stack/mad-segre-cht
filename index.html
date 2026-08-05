@@ -247,6 +247,7 @@
   .field input:focus, .field select:focus, .field textarea:focus{ outline:none; border-color:var(--bordeaux-light); }
   .two-col{ display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:12px;}
   .modal-foot{ padding:16px 20px; display:flex; gap:10px; justify-content:flex-end; border-top:1px solid var(--line); }
+  .btn-danger.confirming{ background:var(--warn); color:white; }
   .btn-ghost{ background:var(--mist); color:var(--ink); }
   .btn-danger{ background:#fdecea; color:var(--warn); }
   .btn-solid{ background:var(--bordeaux); color:white; }
@@ -305,6 +306,7 @@
     /* pied de modale : les boutons passent sur deux lignes plutôt que de déborder */
     .modal-foot{
       flex-wrap:wrap;
+      row-gap:12px;
     }
     .modal-foot .btn{
       flex:1 1 calc(50% - 5px);
@@ -1444,8 +1446,8 @@ MATERIELS_JSON = [{"id": "0f3MGHVYQTSHn4FwKReDZw", "nom": "VW frigo", "categorie
         ${isPast(r.fin) ? `<div class="field"><label style="display:flex;align-items:center;gap:8px; cursor:pointer;"><input type="checkbox" id="f_rendu" style="width:auto;" ${r.rendu?'checked':''}/> Matériel rendu</label></div>` : ''}
       </div>
       <div class="modal-foot">
-        <button class="btn btn-danger" id="delBtn">Supprimer</button>
         <button class="btn btn-ghost" id="dupBtn">⧉ Dupliquer</button>
+        <button class="btn btn-danger" id="delBtn">Supprimer</button>
         <button class="btn btn-ghost" id="cancelBtn">Annuler</button>
         <button class="btn btn-solid" id="saveBtn">Enregistrer</button>
       </div>
@@ -1462,7 +1464,19 @@ MATERIELS_JSON = [{"id": "0f3MGHVYQTSHn4FwKReDZw", "nom": "VW frigo", "categorie
       });
     });
     document.getElementById('cancelBtn').addEventListener('click', closeModal);
-    document.getElementById('delBtn').addEventListener('click', async ()=>{
+    const delBtn = document.getElementById('delBtn');
+    let delConfirmTimer = null;
+    delBtn.addEventListener('click', async ()=>{
+      if(!delBtn.classList.contains('confirming')){
+        delBtn.classList.add('confirming');
+        delBtn.textContent = 'Confirmer la suppression ?';
+        delConfirmTimer = setTimeout(()=>{
+          delBtn.classList.remove('confirming');
+          delBtn.textContent = 'Supprimer';
+        }, 4000);
+        return;
+      }
+      clearTimeout(delConfirmTimer);
       const freshList = await reservationOp('delete', id, null, null);
       if(freshList) reservations = freshList;
       closeModal(); toast("Réservation supprimée."); render();
