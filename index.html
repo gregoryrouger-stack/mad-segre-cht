@@ -241,11 +241,11 @@
   .field{ margin-bottom:16px; min-width:0; }
   .field label{ display:block; font-size:12.5px; font-weight:700; color:#6b6270; margin-bottom:6px; text-transform:uppercase; letter-spacing:.3px;}
   .field input, .field select, .field textarea{
-    width:100%; min-width:0; padding:11px 12px; border-radius:10px; border:1.5px solid var(--line);
+    width:100%; max-width:100%; min-width:0; padding:11px 12px; border-radius:10px; border:1.5px solid var(--line);
     font-size:14px; background:var(--mist); font-family:inherit;
   }
   .field input:focus, .field select:focus, .field textarea:focus{ outline:none; border-color:var(--bordeaux-light); }
-  .two-col{ display:grid; grid-template-columns:1fr 1fr; gap:12px;}
+  .two-col{ display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:12px;}
   .modal-foot{ padding:16px 20px; display:flex; gap:10px; justify-content:flex-end; border-top:1px solid var(--line); }
   .btn-ghost{ background:var(--mist); color:var(--ink); }
   .btn-danger{ background:#fdecea; color:var(--warn); }
@@ -364,7 +364,7 @@
     .modal{ max-width:100%; width:100%; border-radius:16px 16px 0 0; max-height:92vh; display:flex; flex-direction:column; }
     .modal-body{ max-height:none; flex:1; }
     .modal-head{ padding:16px; }
-    .two-col{ grid-template-columns:1fr; }
+    .two-col{ grid-template-columns:minmax(0,1fr); }
 
     .res-mini{ padding:9px 10px; }
     .retour-row{ padding:11px 2px; gap:11px; }
@@ -416,6 +416,14 @@ MATERIELS_JSON = [{"id": "0f3MGHVYQTSHn4FwKReDZw", "nom": "VW frigo", "categorie
     if(!iso) return "";
     const d = new Date(iso+"T00:00:00");
     return `${JOURS[d.getDay()]} ${d.getDate()} ${MOIS[d.getMonth()]} ${d.getFullYear()}`;
+  }
+  function fmtDateTimeCreation(iso){
+    if(!iso) return "";
+    const d = new Date(iso);
+    if(isNaN(d)) return "";
+    const heure = String(d.getHours()).padStart(2,'0');
+    const min = String(d.getMinutes()).padStart(2,'0');
+    return `${d.getDate()} ${MOIS[d.getMonth()]} ${d.getFullYear()} à ${heure}:${min}`;
   }
   function fmtShort(iso){
     if(!iso) return "";
@@ -1189,7 +1197,7 @@ MATERIELS_JSON = [{"id": "0f3MGHVYQTSHn4FwKReDZw", "nom": "VW frigo", "categorie
       const icone = newPhotoDataUri || prefill.icone || '';
       const photo = newPhotoDataUri || prefill.photo || '';
       const newItem = {
-        id: 'mat-new-'+(nextId++),
+        id: uniqueId('mat'),
         nom, categorie, lieu,
         icone, photo, commentaire
       };
@@ -1400,6 +1408,7 @@ MATERIELS_JSON = [{"id": "0f3MGHVYQTSHn4FwKReDZw", "nom": "VW frigo", "categorie
         <button class="close-x" id="closeX">✕</button>
       </div>
       <div class="modal-body">
+        ${r.dateCreation ? `<div style="font-size:11.5px;color:#8a8189;margin-bottom:14px;">Créée le ${fmtDateTimeCreation(r.dateCreation)}</div>` : ''}
         ${blocking.length>0 ? `
           <div style="background:#f3bdb5;border:1.5px solid var(--warn);border-radius:12px;padding:14px 16px;margin-bottom:16px;">
             <div style="color:var(--warn);font-weight:800;font-size:13.5px;margin-bottom:8px;">⚠ Matériel non revenu — réservation précédente non cochée :</div>
@@ -1677,7 +1686,8 @@ MATERIELS_JSON = [{"id": "0f3MGHVYQTSHn4FwKReDZw", "nom": "VW frigo", "categorie
       }
       const matched = materielByName(materielNom);
       const newItem = {
-        id: 'new-'+(nextId++),
+        id: uniqueId('res'),
+        dateCreation: new Date().toISOString(),
         client, materiel: materielNom, magasin, debut, fin,
         categorie: matched?matched.categorie:'',
         icone: matched?matched.icone:'',
