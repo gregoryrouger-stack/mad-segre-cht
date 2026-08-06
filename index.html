@@ -417,7 +417,10 @@ MATERIELS_JSON = [{"id": "0f3MGHVYQTSHn4FwKReDZw", "nom": "VW frigo", "categorie
   function addDaysToDate(iso, n){
     const d = new Date(iso+"T00:00:00");
     d.setDate(d.getDate()+n);
-    return d.toISOString().slice(0,10);
+    const y = d.getFullYear();
+    const m = String(d.getMonth()+1).padStart(2,'0');
+    const day = String(d.getDate()).padStart(2,'0');
+    return `${y}-${m}-${day}`;
   }
 
   function fmtDate(iso){
